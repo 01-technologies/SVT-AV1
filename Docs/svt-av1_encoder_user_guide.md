@@ -94,9 +94,9 @@ The intra period defines the interval of frames after which you insert an Intra 
 
 This token sets the bitrate control encoding mode [1: Variable Bitrate, 0: Constant QP OR Constant Rate Factor]. When `--rc` is set to 1, it is best to match the `--lookahead` (lookahead distance described in the next section) parameter to the `--keyint`.
 
-with `--rc` set to 0, if `--crf` is used then enable-tpl-la is forced to 1, however, if `-q`/`--qp` is used then the encoder will work in CRF mode if `--enable-tpl-la` is set to 1 and in CQP mode (fixed qp offsets regardless of the content) when `--enable-tpl-la` is set to 0.
+With `--rc` set to 0, if `--crf` is used then enable-tpl-la is forced to 1, however, if `-q`/`--qp` is used then the encoder will work in CRF mode if `--enable-tpl-la` is set to 1 and in CQP mode (fixed qp offsets regardless of the content) when `--enable-tpl-la` is set to 0.
 
-If a qp/crf values is not specified, a default value is assigned (50).
+If a qp/crf value is not specified, a default value is assigned (50).
 
 For example, the following command encodes 100 frames of the YUV video sequence into the bin bit stream file. The picture is 1920 luma pixels wide and 1080 pixels high using the `Sample.cfg` configuration. The QP equals 30 and the md5 checksum is not included in the bit stream.
 
