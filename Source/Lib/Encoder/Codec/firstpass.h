@@ -63,10 +63,6 @@ typedef struct {
    */
     double intra_error;
     /*!
-   * Average wavelet energy computed using Discrete Wavelet Transform (DWT).
-   */
-    double frame_avg_wavelet_energy;
-    /*!
    * Best of intra pred error and inter pred error using last frame as ref.
    */
     double coded_error;
@@ -179,10 +175,6 @@ enum {
 typedef struct {
     unsigned char             index;
     /*frame_update_type*/ int update_type[MAX_STATIC_GF_GROUP_LENGTH];
-    unsigned char             arf_src_offset[MAX_STATIC_GF_GROUP_LENGTH];
-    // The number of frames displayed so far within the GOP at a given coding
-    // frame.
-    unsigned char cur_frame_idx[MAX_STATIC_GF_GROUP_LENGTH];
     unsigned char frame_disp_idx[MAX_STATIC_GF_GROUP_LENGTH];
 
     // TODO(jingning): Unify the data structure used here after the new control
@@ -191,14 +183,14 @@ typedef struct {
     int arf_boost[MAX_STATIC_GF_GROUP_LENGTH];
     int max_layer_depth;
     int max_layer_depth_allowed;
-    // This is currently only populated for AOM_Q mode
-    unsigned char q_val[MAX_STATIC_GF_GROUP_LENGTH];
     int           bit_allocation[MAX_STATIC_GF_GROUP_LENGTH];
     int           size;
 } GF_GROUP;
 
 typedef struct {
     FIRSTPASS_STATS *stats_in_start;
+    // used when writing the stat.i.e in the first pass
+    FIRSTPASS_STATS *stats_in_end_write;
     FIRSTPASS_STATS *stats_in_end;
     FIRSTPASS_STATS *stats_in_buf_end;
     FIRSTPASS_STATS *total_stats;
@@ -226,7 +218,6 @@ typedef struct {
     double                 modified_error_max;
     double                 modified_error_left;
     double                 mb_av_energy;
-    double                 frame_avg_haar_energy;
 
     // An indication of the content type of the current frame
     FRAME_CONTENT_TYPE fr_content_type;
@@ -261,8 +252,6 @@ typedef struct {
 typedef struct {
     // Intra prediction error.
     int64_t intra_error;
-    // Average wavelet energy computed using Discrete Wavelet Transform (DWT).
-    int64_t frame_avg_wavelet_energy;
     // Best of intra pred error and inter pred error using last frame as ref.
     int64_t coded_error;
     // Best of intra pred error and inter pred error using golden frame as ref.

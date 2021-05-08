@@ -28,7 +28,7 @@ extern "C" {
 #endif
 
     extern EbErrorType motion_estimate_sb(
-        PictureParentControlSet   *pcs_ptr,
+        PictureParentControlSet      *pcs_ptr,
         uint32_t                       sb_index,
         uint32_t                       sb_origin_x,
         uint32_t                       sb_origin_y,
@@ -65,7 +65,7 @@ extern "C" {
         MotionEstimationContext_t *context_ptr,
         EbPictureBufferDesc       *input_ptr);
     extern EbErrorType open_loop_intra_search_mb(
-        PictureParentControlSet   *picture_control_set_ptr,
+        PictureParentControlSet *pcs_ptr,
         uint32_t                   sb_index,
         EbPictureBufferDesc       *input_ptr);
 #define a_b_c  0

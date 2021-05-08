@@ -113,15 +113,6 @@ int get_comp_group_idx_context_enc(const MacroBlockD *xd) {
     return AOMMIN(5, above_ctx + left_ctx);
 }
 
-/************************************************
-* CABAC Encoder Constructor
-************************************************/
-void cabac_ctor(CabacEncodeContext *cabacEncContextPtr) {
-    EB_MEMSET(cabacEncContextPtr, 0, sizeof(CabacEncodeContext));
-
-    return;
-}
-
 static INLINE int32_t does_level_match(int32_t width, int32_t height, double fps, int32_t lvl_width,
                                        int32_t lvl_height, double lvl_fps, int32_t lvl_dim_mult) {
     const int64_t lvl_luma_pels           = (int64_t)lvl_width * lvl_height;
@@ -1510,8 +1501,7 @@ MotionMode motion_mode_allowed(const PictureControlSet *pcs_ptr, const BlkStruct
 static void write_motion_mode(FRAME_CONTEXT *frame_context, AomWriter *ec_writer, BlockSize bsize,
                               MotionMode motion_mode, MvReferenceFrame rf0, MvReferenceFrame rf1,
                               BlkStruct *blk_ptr, PictureControlSet *pcs_ptr) {
-    const PredictionMode mode = blk_ptr->prediction_unit_array[0].inter_mode;
-
+    const PredictionMode mode = blk_ptr->pred_mode;
     MotionMode last_motion_mode_allowed = motion_mode_allowed(
         pcs_ptr, blk_ptr, bsize, rf0, rf1, mode);
 
@@ -1992,93 +1982,6 @@ static void write_inter_compound_mode(FRAME_CONTEXT *frame_context, AomWriter *e
                      frame_context->inter_compound_mode_cdf[mode_ctx],
                      INTER_COMPOUND_MODES);
 }
-
-int32_t svt_av1_get_reference_mode_context(uint32_t blk_origin_x, uint32_t blk_origin_y,
-                                           NeighborArrayUnit *mode_type_neighbor_array,
-                                           NeighborArrayUnit *inter_pred_dir_neighbor_array) {
-    uint32_t mode_type_left_neighbor_index = get_neighbor_array_unit_left_index(
-        mode_type_neighbor_array, blk_origin_y);
-    uint32_t mode_type_top_neighbor_index = get_neighbor_array_unit_top_index(
-        mode_type_neighbor_array, blk_origin_x);
-
-    int32_t ctx = 0;
-
-    // Note:
-    // The mode info data structure has a one element border above and to the
-    // left of the entries corresponding to real macroblocks.
-    // The prediction flags in these dummy entries are initialized to 0.
-    if (mode_type_neighbor_array->left_array[mode_type_left_neighbor_index] !=
-            (uint8_t)INVALID_MODE &&
-        mode_type_neighbor_array->top_array[mode_type_top_neighbor_index] !=
-            (uint8_t)INVALID_MODE) { // both edges available
-        const int32_t top_intra =
-            (mode_type_neighbor_array->top_array[mode_type_top_neighbor_index] ==
-             (uint8_t)INTRA_MODE);
-        const int32_t left_intra =
-            (mode_type_neighbor_array->left_array[mode_type_left_neighbor_index] ==
-             (uint8_t)INTRA_MODE);
-        //if (has_above && has_left) {  // both edges available
-        if (!(inter_pred_dir_neighbor_array->top_array[mode_type_top_neighbor_index] == BI_PRED &&
-              !top_intra) &&
-            !(inter_pred_dir_neighbor_array->left_array[mode_type_left_neighbor_index] == BI_PRED &&
-              !left_intra)) {
-            // neither edge uses comp pred (0/1)
-            ctx = (inter_pred_dir_neighbor_array->top_array[mode_type_top_neighbor_index] ==
-                   UNI_PRED_LIST_1) ^
-                (inter_pred_dir_neighbor_array->left_array[mode_type_left_neighbor_index] ==
-                 UNI_PRED_LIST_1);
-        } else if (!(inter_pred_dir_neighbor_array->top_array[mode_type_top_neighbor_index] ==
-                         BI_PRED &&
-                     !top_intra) /*has_second_ref(above_mbmi)*/) {
-            // one of two edges uses comp pred (2/3)
-            ctx = 2 +
-                ((inter_pred_dir_neighbor_array->top_array[mode_type_top_neighbor_index] ==
-                  UNI_PRED_LIST_1) ||
-                 top_intra);
-        } else if (!(inter_pred_dir_neighbor_array->left_array[mode_type_left_neighbor_index] ==
-                         BI_PRED &&
-                     !left_intra) /*has_second_ref(left_mbmi)*/) {
-            // one of two edges uses comp pred (2/3)
-            ctx = 2 +
-                ((inter_pred_dir_neighbor_array->left_array[mode_type_left_neighbor_index] ==
-                  UNI_PRED_LIST_1) ||
-                 left_intra);
-        } else { // both edges use comp pred (4){
-            ctx = 4;
-        }
-    } else if (mode_type_neighbor_array->left_array[mode_type_left_neighbor_index] !=
-               (uint8_t)INVALID_MODE) { // one edge available
-
-        if (!(inter_pred_dir_neighbor_array->left_array[mode_type_left_neighbor_index] == BI_PRED &&
-              mode_type_neighbor_array->left_array[mode_type_left_neighbor_index] !=
-                  (uint8_t)INTRA_MODE) /*has_second_ref(edge_mbmi)*/) {
-            // edge does not use comp pred (0/1)
-            ctx = (inter_pred_dir_neighbor_array->left_array[mode_type_left_neighbor_index] ==
-                   UNI_PRED_LIST_1);
-        } else {
-            // edge uses comp pred (3)
-            ctx = 3;
-        }
-    } else if (mode_type_neighbor_array->top_array[mode_type_top_neighbor_index] !=
-               (uint8_t)INVALID_MODE) { // one edge available
-
-        if (!(inter_pred_dir_neighbor_array->top_array[mode_type_top_neighbor_index] == BI_PRED &&
-              mode_type_neighbor_array->top_array[mode_type_top_neighbor_index] !=
-                  (uint8_t)INTRA_MODE) /*has_second_ref(edge_mbmi)*/) {
-            // edge does not use comp pred (0/1)
-            ctx = (inter_pred_dir_neighbor_array->top_array[mode_type_top_neighbor_index] ==
-                   UNI_PRED_LIST_1);
-        } else {
-            // edge uses comp pred (3)
-            ctx = 3;
-        }
-    } else { // no edges available (1)
-        ctx = 1;
-    }
-
-    assert(ctx >= 0 && ctx < COMP_INTER_CONTEXTS);
-    return ctx;
-}
 int         svt_av1_get_intra_inter_context(const MacroBlockD *xd);
 int         av1_get_reference_mode_context_new(const MacroBlockD *xd);
 AomCdfProb *av1_get_reference_mode_cdf(const MacroBlockD *xd) {
@@ -2345,99 +2248,6 @@ INLINE void av1_collect_neighbors_ref_counts_new(MacroBlockD *const xd) {
             ref_counts[left_mbmi->block_mi.ref_frame[1]]++;
     }
 }
-
-int32_t svt_av1_get_comp_reference_type_context(uint32_t blk_origin_x, uint32_t blk_origin_y,
-                                                NeighborArrayUnit *mode_type_neighbor_array,
-                                                NeighborArrayUnit *inter_pred_dir_neighbor_array) {
-    int32_t pred_context = 0;
-
-    uint32_t mode_type_left_neighbor_index = get_neighbor_array_unit_left_index(
-        mode_type_neighbor_array, blk_origin_y);
-    uint32_t mode_type_top_neighbor_index = get_neighbor_array_unit_top_index(
-        mode_type_neighbor_array, blk_origin_x);
-
-    if (mode_type_neighbor_array->left_array[mode_type_left_neighbor_index] !=
-            (uint8_t)INVALID_MODE &&
-        mode_type_neighbor_array->top_array[mode_type_top_neighbor_index] !=
-            (uint8_t)INVALID_MODE) { // both edges available
-        const int32_t above_intra =
-            (mode_type_neighbor_array->top_array[mode_type_top_neighbor_index] ==
-             (uint8_t)INTRA_MODE);
-        const int32_t left_intra =
-            (mode_type_neighbor_array->left_array[mode_type_left_neighbor_index] ==
-             (uint8_t)INTRA_MODE);
-
-        if (above_intra && left_intra) { // intra/intra
-            pred_context = 2;
-        } else if (left_intra) { // Intra & Inter. Left is Intra, check Top
-
-            if (inter_pred_dir_neighbor_array->top_array[mode_type_top_neighbor_index] !=
-                BI_PRED) // single pred
-                pred_context = 2;
-            else // comp pred
-                pred_context = 1 + 2 * 0 /* has_uni_comp_refs(inter_mbmi)*/;
-        } else if (above_intra) { // Intra & Inter. Top is Intra, check Left
-
-            if (inter_pred_dir_neighbor_array->left_array[mode_type_left_neighbor_index] !=
-                BI_PRED) // single pred
-                pred_context = 2;
-            else // comp pred
-                pred_context = 1 + 2 * 0 /* has_uni_comp_refs(inter_mbmi)*/;
-        } else { // inter/inter
-            const int32_t a_sg =
-                (inter_pred_dir_neighbor_array->top_array[mode_type_top_neighbor_index] != BI_PRED);
-            const int32_t l_sg =
-                (inter_pred_dir_neighbor_array->left_array[mode_type_left_neighbor_index] !=
-                 BI_PRED);
-            //const MvReferenceFrame frfa = above_mbmi->ref_frame[0];
-            //const MvReferenceFrame frfl = left_mbmi->ref_frame[0];
-
-            if (a_sg && l_sg) // single/single
-                pred_context = 1 +
-                    2 *
-                        (!((inter_pred_dir_neighbor_array
-                                ->top_array[mode_type_top_neighbor_index] == UNI_PRED_LIST_1) ^
-                           (inter_pred_dir_neighbor_array
-                                ->left_array[mode_type_left_neighbor_index] == UNI_PRED_LIST_1)));
-            else if (l_sg || a_sg) // single/comp
-                pred_context = 1;
-            else // comp/comp
-                pred_context = 0;
-        }
-    } else if (mode_type_neighbor_array->left_array[mode_type_left_neighbor_index] !=
-               (uint8_t)INVALID_MODE) { // one edge available
-
-        if (mode_type_neighbor_array->left_array[mode_type_left_neighbor_index] ==
-            (uint8_t)INTRA_MODE) { // intra
-            pred_context = 2;
-        } else { // inter
-            if (inter_pred_dir_neighbor_array->left_array[mode_type_left_neighbor_index] !=
-                BI_PRED) // single pred
-                pred_context = 2;
-            else // comp pred
-                pred_context = 4 * 0 /*has_uni_comp_refs(edge_mbmi)*/;
-        }
-    } else if (mode_type_neighbor_array->top_array[mode_type_top_neighbor_index] !=
-               (uint8_t)INVALID_MODE) { // one edge available
-
-        if (mode_type_neighbor_array->top_array[mode_type_top_neighbor_index] ==
-            (uint8_t)INTRA_MODE) { // intra
-            pred_context = 2;
-        } else { // inter
-            if (inter_pred_dir_neighbor_array->top_array[mode_type_top_neighbor_index] !=
-                BI_PRED) // single pred
-                pred_context = 2;
-            else // comp pred
-                pred_context = 4 * 0 /*has_uni_comp_refs(edge_mbmi)*/;
-        }
-    } else { // no edges available
-        pred_context = 2;
-    }
-
-    //assert(pred_context >= 0 && pred_context < COMP_REF_TYPE_CONTEXTS);
-    return pred_context;
-}
-
 #define WRITE_REF_BIT(bname, pname) aom_write_symbol(w, bname, av1_get_pred_cdf_##pname(xd), 2)
 /***************************************************************************************/
 
@@ -2715,7 +2525,6 @@ static void write_ref_frames(FRAME_CONTEXT *frame_context, PictureParentControlS
 }
 static void encode_restoration_mode(PictureParentControlSet * pcs_ptr,
                                     struct AomWriteBitBuffer *wb) {
-    Av1Common *  cm      = pcs_ptr->av1_cm;
     FrameHeader *frm_hdr = &pcs_ptr->frm_hdr;
     //SVT_LOG("ERROR[AN]: encode_restoration_mode might not work. Double check the reference code\n");
     assert(!frm_hdr->all_lossless);
@@ -2731,7 +2540,7 @@ static void encode_restoration_mode(PictureParentControlSet * pcs_ptr,
         //   svt_aom_wb_write_bit(wb, 0);
         //   svt_aom_wb_write_bit(wb, 0);
 
-        RestorationInfo *rsi = &pcs_ptr->av1_cm->rst_info[p];
+        RestorationInfo *rsi = &pcs_ptr->child_pcs->rst_info[p];
 
         //if (p==0)
         //   SVT_LOG("POC:%i Luma rest_type:%i\n", pcs_ptr->picture_number, rsi->frame_restoration_type);
@@ -2769,8 +2578,7 @@ static void encode_restoration_mode(PictureParentControlSet * pcs_ptr,
         //      cm->seq_params.sb_size == BLOCK_128X128);
         const int32_t sb_size = pcs_ptr->scs_ptr->seq_header.sb_size == BLOCK_128X128 ? 128 : 64;
         ;
-        RestorationInfo *rsi = &pcs_ptr->av1_cm->rst_info[0];
-
+        RestorationInfo *rsi = &pcs_ptr->child_pcs->rst_info[0];
         assert(rsi->restoration_unit_size >= sb_size);
         assert(RESTORATION_UNITSIZE_MAX == 256);
 
@@ -2779,14 +2587,13 @@ static void encode_restoration_mode(PictureParentControlSet * pcs_ptr,
         if (rsi->restoration_unit_size > 64)
             svt_aom_wb_write_bit(wb, rsi->restoration_unit_size > 128);
     }
-
     if (!chroma_none) {
         svt_aom_wb_write_bit(
-            wb, cm->rst_info[1].restoration_unit_size != cm->rst_info[0].restoration_unit_size);
-        assert(cm->rst_info[1].restoration_unit_size == cm->rst_info[0].restoration_unit_size ||
-               cm->rst_info[1].restoration_unit_size ==
-                   (cm->rst_info[0].restoration_unit_size >> 1));
-        assert(cm->rst_info[2].restoration_unit_size == cm->rst_info[1].restoration_unit_size);
+            wb, pcs_ptr->child_pcs->rst_info[1].restoration_unit_size != pcs_ptr->child_pcs->rst_info[0].restoration_unit_size);
+        assert(pcs_ptr->child_pcs->rst_info[1].restoration_unit_size == pcs_ptr->child_pcs->rst_info[0].restoration_unit_size ||
+               pcs_ptr->child_pcs->rst_info[1].restoration_unit_size ==
+                   (pcs_ptr->child_pcs->rst_info[0].restoration_unit_size >> 1));
+        assert(pcs_ptr->child_pcs->rst_info[2].restoration_unit_size == pcs_ptr->child_pcs->rst_info[1].restoration_unit_size);
     }
 }
 
@@ -3125,11 +2932,12 @@ static void write_tile_info(const PictureParentControlSet *const pcs_ptr,
 
     if (pcs_ptr->av1_cm->tiles_info.tile_rows * pcs_ptr->av1_cm->tiles_info.tile_cols > 1) {
         // tile id used for cdf update
+        // Force each frame to update their data so future frames can use it,
+        // even if the current frame did not use it.  This enables REF frames to
+        // have the feature off, while NREF frames can have it on.  Used for multi-threading.
         svt_aom_wb_write_literal(
             wb,
-            pcs_ptr->frame_end_cdf_update_mode
-                ? pcs_ptr->av1_cm->tiles_info.tile_rows * pcs_ptr->av1_cm->tiles_info.tile_cols - 1
-                : 0,
+            pcs_ptr->av1_cm->tiles_info.tile_rows * pcs_ptr->av1_cm->tiles_info.tile_cols - 1,
             pcs_ptr->av1_cm->log2_tile_cols + pcs_ptr->av1_cm->log2_tile_rows);
 
         // Number of bytes in tile size - 1
@@ -3236,15 +3044,15 @@ static void write_color_config(SequenceControlSet *      scs_ptr /*Av1Common *co
     //    svt_aom_wb_write_bit(wb, is_monochrome);
     //else
     //    assert(!is_monochrome);
-    if (1/*cm->color_primaries == AOM_CICP_CP_UNSPECIFIED &&
-         cm->transfer_characteristics == AOM_CICP_TC_UNSPECIFIED &&
-         cm->matrix_coefficients == AOM_CICP_MC_UNSPECIFIED*/) {
+    if (scs_ptr->static_config.color_primaries == AOM_CICP_CP_UNSPECIFIED &&
+        scs_ptr->static_config.transfer_characteristics == AOM_CICP_TC_UNSPECIFIED &&
+        scs_ptr->static_config.matrix_coefficients == AOM_CICP_MC_UNSPECIFIED) {
         svt_aom_wb_write_bit(wb, 0); // No color description present
     } else {
-        //svt_aom_wb_write_bit(wb, 1);  // Color description present
-        //svt_aom_wb_write_literal(wb, cm->color_primaries, 8);
-        //svt_aom_wb_write_literal(wb, cm->transfer_characteristics, 8);
-        //svt_aom_wb_write_literal(wb, cm->matrix_coefficients, 8);
+        svt_aom_wb_write_bit(wb, 1);  // Color description present
+        svt_aom_wb_write_literal(wb, scs_ptr->static_config.color_primaries, 8);
+        svt_aom_wb_write_literal(wb, scs_ptr->static_config.transfer_characteristics, 8);
+        svt_aom_wb_write_literal(wb, scs_ptr->static_config.matrix_coefficients, 8);
     }
     //if (is_monochrome) {
     //    SVT_LOG("ERROR[AN]: is_monochrome not supported yet\n");
@@ -3260,8 +3068,7 @@ static void write_color_config(SequenceControlSet *      scs_ptr /*Av1Common *co
         //    (cm->profile == PROFILE_2 && cm->bit_depth == AOM_BITS_12));
     } else {
         // 0: [16, 235] (i.e. xvYCC), 1: [0, 255]
-        svt_aom_wb_write_bit(wb, 0);
-        //svt_aom_wb_write_bit(wb, cm->color_range);
+        svt_aom_wb_write_bit(wb, scs_ptr->static_config.color_range);
 
         //if (cm->profile == PROFILE_0) {
         //    // 420 only
@@ -4528,14 +4335,15 @@ static void write_sgrproj_filter(const SgrprojInfo *sgrproj_info, SgrprojInfo *r
 
     svt_memcpy(ref_sgrproj_info, sgrproj_info, sizeof(*sgrproj_info));
 }
-static void loop_restoration_write_sb_coeffs(PictureControlSet     *piCSetPtr, FRAME_CONTEXT           *frame_context, const Av1Common *const cm,
+
+static void loop_restoration_write_sb_coeffs(PictureControlSet     *piCSetPtr, FRAME_CONTEXT           *frame_context,
     uint16_t tile_idx,
     //MacroBlockD *xd,
     const RestorationUnitInfo *rui,
     AomWriter *const w, int32_t plane/*,
     FRAME_COUNTS *counts*/)
 {
-    const RestorationInfo *rsi         = cm->rst_info + plane;
+    const RestorationInfo *rsi         = piCSetPtr->rst_info + plane;
     RestorationType        frame_rtype = rsi->frame_restoration_type;
     if (frame_rtype == RESTORE_NONE)
         return;
@@ -4621,8 +4429,6 @@ EbErrorType ec_update_neighbors(PictureControlSet *pcs_ptr, EntropyCodingContext
         pcs_ptr->cr_dc_sign_level_coeff_neighbor_array[tile_idx];
     NeighborArrayUnit *cb_dc_sign_level_coeff_neighbor_array =
         pcs_ptr->cb_dc_sign_level_coeff_neighbor_array[tile_idx];
-    NeighborArrayUnit *inter_pred_dir_neighbor_array =
-        pcs_ptr->inter_pred_dir_neighbor_array[tile_idx];
     NeighborArrayUnit *ref_frame_type_neighbor_array =
         pcs_ptr->ref_frame_type_neighbor_array[tile_idx];
     NeighborArrayUnit32 *interpolation_type_neighbor_array =
@@ -4709,20 +4515,6 @@ EbErrorType ec_update_neighbors(PictureControlSet *pcs_ptr, EntropyCodingContext
         }
         context_ptr->coded_area_sb += blk_geom->bwidth * blk_geom->bheight;
     }
-
-    // Update the Inter Pred Type Neighbor Array
-    {
-        uint8_t inter_pred_direction_index =
-            (uint8_t)blk_ptr->prediction_unit_array->inter_pred_direction_index;
-        neighbor_array_unit_mode_write(inter_pred_dir_neighbor_array,
-                                       (uint8_t *)&(inter_pred_direction_index),
-                                       blk_origin_x,
-                                       blk_origin_y,
-                                       blk_geom->bwidth,
-                                       blk_geom->bheight,
-                                       NEIGHBOR_ARRAY_UNIT_TOP_AND_LEFT_ONLY_MASK);
-    }
-
     // Update the refFrame Type Neighbor Array
     {
         uint8_t ref_frame_type = (uint8_t)blk_ptr->prediction_unit_array[0].ref_frame_type;
@@ -5483,11 +5275,11 @@ EbErrorType write_modes_b(PictureControlSet *pcs_ptr, EntropyCodingContext *cont
     blk_ptr->av1xd->up_available      = (mi_row > tb_ptr->tile_info.mi_row_start);
     blk_ptr->av1xd->left_available    = (mi_col > tb_ptr->tile_info.mi_col_start);
     if (blk_ptr->av1xd->up_available)
-        blk_ptr->av1xd->above_mbmi = &mi_ptr[-mi_stride].mbmi;
+        blk_ptr->av1xd->above_mbmi = &blk_ptr->av1xd->mi[-mi_stride]->mbmi;
     else
         blk_ptr->av1xd->above_mbmi = NULL;
     if (blk_ptr->av1xd->left_available)
-        blk_ptr->av1xd->left_mbmi = &mi_ptr[-1].mbmi;
+        blk_ptr->av1xd->left_mbmi = &blk_ptr->av1xd->mi[-1]->mbmi;
     else
         blk_ptr->av1xd->left_mbmi = NULL;
     blk_ptr->av1xd->tile_ctx = frame_context;
@@ -5823,8 +5615,7 @@ EbErrorType write_modes_b(PictureControlSet *pcs_ptr, EntropyCodingContext *cont
                 MvReferenceFrame rf[2];
                 av1_set_ref_frame(rf, blk_ptr->prediction_unit_array[0].ref_frame_type);
                 int16_t        mode_ctx = av1_mode_context_analyzer(blk_ptr->inter_mode_ctx, rf);
-                PredictionMode inter_mode =
-                    (PredictionMode)blk_ptr->prediction_unit_array[0].inter_mode;
+                PredictionMode inter_mode = (PredictionMode)blk_ptr->pred_mode;
                 const int32_t is_compound =
                     (blk_ptr->prediction_unit_array[0].inter_pred_direction_index == BI_PRED);
 
@@ -6169,15 +5960,14 @@ EB_EXTERN EbErrorType write_sb(EntropyCodingContext *context_ptr, SuperBlock *tb
                                                                &rrow0,
                                                                &rrow1,
                                                                &tile_tl_idx)) {
-                        const int32_t rstride = cm->rst_info[plane].horz_units_per_tile;
+                        const int32_t rstride = pcs_ptr->rst_info[plane].horz_units_per_tile;
                         for (int32_t rrow = rrow0; rrow < rrow1; ++rrow) {
                             for (int32_t rcol = rcol0; rcol < rcol1; ++rcol) {
                                 const int32_t runit_idx = tile_tl_idx + rcol + rrow * rstride;
                                 const RestorationUnitInfo *rui =
-                                    &cm->rst_info[plane].unit_info[runit_idx];
+                                    &pcs_ptr->rst_info[plane].unit_info[runit_idx];
                                 loop_restoration_write_sb_coeffs(pcs_ptr,
                                                                  frame_context,
-                                                                 cm,
                                                                  tile_idx,
                                                                  /*xd,*/ rui,
                                                                  ec_writer,

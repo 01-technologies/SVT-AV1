@@ -31,6 +31,10 @@ static void mode_decision_context_dctor(EbPtr p) {
     }
     EB_FREE_ARRAY(obj->ref_best_ref_sq_table);
     EB_FREE_ARRAY(obj->ref_best_cost_sq_table);
+    for (CandClass cand_class_it = CAND_CLASS_0; cand_class_it < CAND_CLASS_TOTAL; cand_class_it++)
+        EB_FREE_ARRAY(obj->cand_buff_indices[cand_class_it]);
+    EB_FREE_ARRAY(obj->best_candidate_index_array);
+
     EB_FREE_ARRAY(obj->above_txfm_context);
     EB_FREE_ARRAY(obj->left_txfm_context);
 #if NO_ENCDEC //SB128_TODO to upgrade
@@ -40,7 +44,7 @@ static void mode_decision_context_dctor(EbPtr p) {
         EB_DELETE(obj->md_blk_arr_nsq[coded_leaf_index].coeff_tmp);
     }
 #endif
-    EB_DELETE_PTR_ARRAY(obj->candidate_buffer_ptr_array, MAX_NFL_BUFF);
+    EB_DELETE_PTR_ARRAY(obj->candidate_buffer_ptr_array, obj->max_nics_uv);
     EB_FREE_ARRAY(obj->candidate_buffer_tx_depth_1->candidate_ptr);
     EB_DELETE(obj->candidate_buffer_tx_depth_1);
     EB_FREE_ARRAY(obj->candidate_buffer_tx_depth_2->candidate_ptr);
@@ -66,6 +70,8 @@ static void mode_decision_context_dctor(EbPtr p) {
         EB_FREE_ARRAY(obj->md_blk_arr_nsq[0].av1xd);
     }
     EB_FREE_ARRAY(obj->avail_blk_flag);
+    EB_FREE_ARRAY(obj->tested_blk_flag);
+    EB_FREE_ARRAY(obj->do_not_process_blk);
     EB_FREE_ARRAY(obj->md_local_blk_unit);
     EB_FREE_ARRAY(obj->md_blk_arr_nsq);
     EB_FREE_ARRAY(obj->md_ep_pipe_sb);
@@ -81,11 +87,15 @@ static void mode_decision_context_dctor(EbPtr p) {
     EB_DELETE(obj->temp_recon_ptr);
 }
 
+
+uint8_t  get_nic_scaling_level(PdPass pd_pass, EbEncMode enc_mode ,uint8_t temporal_layer_index );
+
 /******************************************************
  * Mode Decision Context Constructor
  ******************************************************/
 EbErrorType mode_decision_context_ctor(ModeDecisionContext *context_ptr, EbColorFormat color_format,
                                        uint8_t sb_size,
+                                        uint8_t enc_mode,
                                        EbFifo *mode_decision_configuration_input_fifo_ptr,
                                        EbFifo *mode_decision_output_fifo_ptr,
                                        uint8_t enable_hbd_mode_decision, uint8_t cfg_palette) {
@@ -104,6 +114,36 @@ EbErrorType mode_decision_context_ctor(ModeDecisionContext *context_ptr, EbColor
         mode_decision_configuration_input_fifo_ptr;
     context_ptr->mode_decision_output_fifo_ptr = mode_decision_output_fifo_ptr;
 
+    // Maximum number of candidates MD can support
+    // determine MAX_NICS for a given preset
+    uint32_t max_nics = 0;
+
+    // get max number of NICS
+    for (uint8_t pic_type = 0; pic_type < NICS_PIC_TYPE; pic_type++) {
+        uint32_t nics = 0;
+        for (CandClass cand_class_it = CAND_CLASS_0; cand_class_it < CAND_CLASS_TOTAL; cand_class_it++) {
+            nics += MD_STAGE_NICS[pic_type][cand_class_it];
+        }
+        max_nics = MAX(max_nics ,nics);
+    }
+
+
+    // get the min scalling level ( smallest scalling level is the most concervative
+    uint8_t min_nic_scaling_level = NICS_SCALING_LEVELS - 1 ;
+    for (PdPass pd_id = 0; pd_id < PD_PASS_TOTAL; pd_id++) {
+
+        for (uint8_t temporal_layer_index = 0; temporal_layer_index < MAX_TEMPORAL_LAYERS; temporal_layer_index++) {
+            min_nic_scaling_level = MIN(min_nic_scaling_level, get_nic_scaling_level(pd_id,  enc_mode,  temporal_layer_index));
+        }
+    }
+    // scale max_nics
+    uint8_t stage1_scaling_num = MD_STAGE_NICS_SCAL_NUM[min_nic_scaling_level][MD_STAGE_1];
+    max_nics   = MAX(2,
+            DIVIDE_AND_ROUND(max_nics * stage1_scaling_num, MD_STAGE_NICS_SCAL_DENUM));
+
+    max_nics += CAND_CLASS_TOTAL ; //need one extra temp buffer for each fast loop call
+    context_ptr->max_nics = max_nics;
+    context_ptr->max_nics_uv = max_nics + 84; // needed for independant chroma search
     // Cfl scratch memory
     if (context_ptr->hbd_mode_decision > EB_8_BIT_MD)
         EB_MALLOC_ALIGNED(context_ptr->cfl_temp_luma_recon16bit,
@@ -125,8 +165,6 @@ EbErrorType mode_decision_context_ctor(ModeDecisionContext *context_ptr, EbColor
     for (cand_index = 0; cand_index < MODE_DECISION_CANDIDATE_MAX_COUNT; ++cand_index) {
         context_ptr->fast_candidate_ptr_array[cand_index] =
             &context_ptr->fast_candidate_array[cand_index];
-        context_ptr->fast_candidate_ptr_array[cand_index]->md_rate_estimation_ptr =
-            context_ptr->md_rate_estimation_ptr;
         context_ptr->fast_candidate_ptr_array[cand_index]->palette_info = NULL;
     }
     for (int cd = 0; cd < MAX_PAL_CAND; cd++)
@@ -138,10 +176,11 @@ EbErrorType mode_decision_context_ctor(ModeDecisionContext *context_ptr, EbColor
     EB_NEW(context_ptr->trans_quant_buffers_ptr, svt_trans_quant_buffers_ctor, sb_size);
 
     // Cost Arrays
-    EB_MALLOC_ARRAY(context_ptr->fast_cost_array, MAX_NFL_BUFF);
-    EB_MALLOC_ARRAY(context_ptr->full_cost_array, MAX_NFL_BUFF);
-    EB_MALLOC_ARRAY(context_ptr->full_cost_skip_ptr, MAX_NFL_BUFF);
-    EB_MALLOC_ARRAY(context_ptr->full_cost_merge_ptr, MAX_NFL_BUFF);
+    EB_MALLOC_ARRAY(context_ptr->fast_cost_array,  context_ptr->max_nics_uv);
+    EB_MALLOC_ARRAY(context_ptr->full_cost_array,  context_ptr->max_nics_uv);
+    EB_MALLOC_ARRAY(context_ptr->full_cost_skip_ptr,  context_ptr->max_nics_uv);
+    EB_MALLOC_ARRAY(context_ptr->full_cost_merge_ptr,  context_ptr->max_nics_uv);
+
     // Candidate Buffers
     EB_NEW(context_ptr->candidate_buffer_tx_depth_1,
            mode_decision_scratch_candidate_buffer_ctor,
@@ -192,6 +231,8 @@ EbErrorType mode_decision_context_ctor(ModeDecisionContext *context_ptr, EbColor
     context_ptr->md_blk_arr_nsq[0].av1xd = NULL;
     EB_MALLOC_ARRAY(context_ptr->md_blk_arr_nsq[0].av1xd, block_max_count_sb);
     EB_MALLOC_ARRAY(context_ptr->avail_blk_flag, block_max_count_sb);
+    EB_MALLOC_ARRAY(context_ptr->tested_blk_flag, block_max_count_sb);
+    EB_MALLOC_ARRAY(context_ptr->do_not_process_blk, block_max_count_sb);
     EB_MALLOC_ARRAY(context_ptr->mdc_sb_array, 1);
     for (coded_leaf_index = 0; coded_leaf_index < block_max_count_sb; ++coded_leaf_index) {
         context_ptr->md_blk_arr_nsq[coded_leaf_index].av1xd = context_ptr->md_blk_arr_nsq[0].av1xd +
@@ -240,6 +281,11 @@ EbErrorType mode_decision_context_ctor(ModeDecisionContext *context_ptr, EbColor
         }
 #endif
     }
+    for (CandClass cand_class_it = CAND_CLASS_0; cand_class_it < CAND_CLASS_TOTAL; cand_class_it++)
+        EB_MALLOC_ARRAY(context_ptr->cand_buff_indices[cand_class_it], context_ptr->max_nics_uv);
+
+    EB_MALLOC_ARRAY(context_ptr->best_candidate_index_array, context_ptr->max_nics_uv);
+
     EB_MALLOC_ARRAY(context_ptr->ref_best_cost_sq_table, MAX_REF_TYPE_CAND);
     EB_MALLOC_ARRAY(context_ptr->ref_best_ref_sq_table, MAX_REF_TYPE_CAND);
     EB_MALLOC_ARRAY(context_ptr->above_txfm_context, (sb_size >> MI_SIZE_LOG2));
@@ -308,8 +354,9 @@ EbErrorType mode_decision_context_ctor(ModeDecisionContext *context_ptr, EbColor
            (EbPtr)&double_width_picture_buffer_desc_init_data);
 
     // Candidate Buffers
-    EB_ALLOC_PTR_ARRAY(context_ptr->candidate_buffer_ptr_array, MAX_NFL_BUFF);
-    for (buffer_index = 0; buffer_index < MAX_NFL_BUFF_Y; ++buffer_index) {
+    EB_ALLOC_PTR_ARRAY(context_ptr->candidate_buffer_ptr_array, context_ptr->max_nics_uv);
+
+    for (buffer_index = 0; buffer_index <  context_ptr->max_nics; ++buffer_index) {
         EB_NEW(context_ptr->candidate_buffer_ptr_array[buffer_index],
                mode_decision_candidate_buffer_ctor,
                context_ptr->hbd_mode_decision ? EB_10BIT : EB_8BIT,
@@ -323,7 +370,7 @@ EbErrorType mode_decision_context_ctor(ModeDecisionContext *context_ptr, EbColor
                &(context_ptr->full_cost_merge_ptr[buffer_index]));
     }
 
-    for (buffer_index = MAX_NFL_BUFF_Y; buffer_index < MAX_NFL_BUFF; ++buffer_index) {
+    for (buffer_index = max_nics; buffer_index <  context_ptr->max_nics_uv; ++buffer_index) {
         EB_NEW(context_ptr->candidate_buffer_ptr_array[buffer_index],
                mode_decision_candidate_buffer_ctor,
                context_ptr->hbd_mode_decision ? EB_10BIT : EB_8BIT,
@@ -346,8 +393,6 @@ void reset_mode_decision_neighbor_arrays(PictureControlSet *pcs_ptr, uint16_t ti
     uint8_t depth;
     for (depth = 0; depth < NEIGHBOR_ARRAY_TOTAL_COUNT; depth++) {
         neighbor_array_unit_reset(pcs_ptr->md_intra_luma_mode_neighbor_array[depth][tile_idx]);
-        neighbor_array_unit_reset(pcs_ptr->md_intra_chroma_mode_neighbor_array[depth][tile_idx]);
-        neighbor_array_unit_reset(pcs_ptr->md_mv_neighbor_array[depth][tile_idx]);
         neighbor_array_unit_reset(pcs_ptr->md_skip_flag_neighbor_array[depth][tile_idx]);
         neighbor_array_unit_reset(pcs_ptr->md_mode_type_neighbor_array[depth][tile_idx]);
         neighbor_array_unit_reset(pcs_ptr->mdleaf_partition_neighbor_array[depth][tile_idx]);
@@ -379,7 +424,6 @@ void reset_mode_decision_neighbor_arrays(PictureControlSet *pcs_ptr, uint16_t ti
         neighbor_array_unit_reset(
             pcs_ptr->md_cr_dc_sign_level_coeff_neighbor_array[depth][tile_idx]);
         neighbor_array_unit_reset(pcs_ptr->md_txfm_context_array[depth][tile_idx]);
-        neighbor_array_unit_reset(pcs_ptr->md_inter_pred_dir_neighbor_array[depth][tile_idx]);
         neighbor_array_unit_reset(pcs_ptr->md_ref_frame_type_neighbor_array[depth][tile_idx]);
 
         neighbor_array_unit_reset32(pcs_ptr->md_interpolation_type_neighbor_array[depth][tile_idx]);
@@ -452,11 +496,6 @@ void reset_mode_decision(SequenceControlSet *scs_ptr, ModeDecisionContext *conte
         EB_FREE_ARRAY(context_ptr->md_rate_estimation_ptr);
     }
     context_ptr->md_rate_estimation_ptr = pcs_ptr->md_rate_estimation_array;
-    uint32_t cand_index;
-    for (cand_index = 0; cand_index < MODE_DECISION_CANDIDATE_MAX_COUNT; ++cand_index)
-        context_ptr->fast_candidate_ptr_array[cand_index]->md_rate_estimation_ptr =
-            context_ptr->md_rate_estimation_ptr;
-
     // Reset CABAC Contexts
 
     // Reset Neighbor Arrays at start of new Segment / Picture

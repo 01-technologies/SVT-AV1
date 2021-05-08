@@ -182,7 +182,7 @@ PredictionStructureConfigEntry four_level_hierarchical_pred_struct[] = {
     {
         0, // GOP Index 0 - Temporal Layer
         0, // GOP Index 0 - Decode Order
-        {8, 0, 0, 0}, // GOP Index 0 - Ref List 0
+        { 8, 16, 0, 0 }, // GOP Index 0 - Ref List 0
         {8, 0, 0, 0} // GOP Index 0 - Ref List 1
     },
     {
@@ -259,6 +259,7 @@ PredictionStructureConfigEntry five_level_hierarchical_pred_struct[] = {
         0, // GOP Index 0 - Temporal Layer
         0, // GOP Index 0 - Decode Order
         {16, 48, 0, 0}, // GOP Index 0 - Ref List 0
+
         {16,
          32,
          0,
@@ -334,6 +335,7 @@ PredictionStructureConfigEntry five_level_hierarchical_pred_struct[] = {
         2, // GOP Index 12 - Temporal Layer
         9, // GOP Index 12 - Decode Order
         {4, 8, 12, 6}, // GOP Index 12 - Ref List 0
+
         {-4, 11, 0, 0} // GOP Index 12 - Ref List 1
     },
     {
@@ -387,13 +389,13 @@ PredictionStructureConfigEntry six_level_hierarchical_pred_struct[] = {
     {
         0, // GOP Index 0 - Temporal Layer
         0, // GOP Index 0 - Decode Order
-        {32, 64, 96, 0}, // GOP Index 0 - Ref List 0
+        {32, 64, 48, 0}, // GOP Index 0 - Ref List 0
         {32, 0, 0, 0} // GOP Index 0 - Ref List 1
     },
     {
         5, // GOP Index 1 - Temporal Layer
         5, // GOP Index 1 - Decode Order
-        {1, 17, 33, 0}, // GOP Index 1 - Ref List 0
+        {1, 17, 2, 0}, // GOP Index 1 - Ref List 0
         {-1, -3, -7, 0} // GOP Index 1 - Ref List 1
     },
     {
@@ -405,19 +407,19 @@ PredictionStructureConfigEntry six_level_hierarchical_pred_struct[] = {
     {
         5, // GOP Index 3 - Temporal Layer
         6, // GOP Index 3 - Decode Order
-        {1, 3, 19, 0}, // GOP Index 3 - Ref List 0
+        {1, 3, 2, 19}, // GOP Index 3 - Ref List 0
         {-1, -5, -13, 0} // GOP Index 3 - Ref List 1
     },
     {
         3, // GOP Index 4 - Temporal Layer
         3, // GOP Index 4 - Decode Order
-        {4, 8, 20, 36}, // GOP Index 4 - Ref List 0
+        {4, 8, 20, 0}, // GOP Index 4 - Ref List 0
         {-4, -12, -28, 0} // GOP Index 4 - Ref List 1
     },
     {
         5, // GOP Index 5 - Temporal Layer
         8, // GOP Index 5 - Decode Order
-        {1, 5, 21, 0}, // GOP Index 5 - Ref List 0
+        {1, 5, 2, 21}, // GOP Index 5 - Ref List 0
         {-1, -3, -11, 0} // GOP Index 5 - Ref List 1
     },
     {
@@ -429,19 +431,19 @@ PredictionStructureConfigEntry six_level_hierarchical_pred_struct[] = {
     {
         5, // GOP Index 7 - Temporal Layer
         9, // GOP Index 7 - Decode Order
-        {1, 3, 7, 23}, // GOP Index 7 - Ref List 0
+        {1, 3, 2, 7}, // GOP Index 7 - Ref List 0
         {-1, -9, -25, 0} // GOP Index 7 - Ref List 1
     },
     {
         2, // GOP Index 8 - Temporal Layer
         2, // GOP Index 8 - Decode Order
-        {8, 16, 24, 40}, // GOP Index 8 - Ref List 0
-        {-8, -24, 0, 0} // GOP Index 8 - Ref List 1
+        {8, 16, 24, 0}, // GOP Index 8 - Ref List 0
+        {-8, -24, 12, 0} // GOP Index 8 - Ref List 1
     },
     {
         5, // GOP Index 9 - Temporal Layer
         12, // GOP Index 9 - Decode Order
-        {1, 9, 25, 0}, // GOP Index 9 - Ref List 0
+        {1, 9, 2, 25}, // GOP Index 9 - Ref List 0
         {-1, -3, -7, 0} // GOP Index 9 - Ref List 1
     },
     {
@@ -453,43 +455,43 @@ PredictionStructureConfigEntry six_level_hierarchical_pred_struct[] = {
     {
         5, // GOP Index 11 - Temporal Layer
         13, // GOP Index 11 - Decode Order
-        {1, 3, 11, 27}, // GOP Index 11 - Ref List 0
+        {1, 3, 2, 11}, // GOP Index 11 - Ref List 0
         {-1, -5, -21, 0} // GOP Index 11 - Ref List 1
     },
     {
         3, // GOP Index 12 - Temporal Layer
         10, // GOP Index 12 - Decode Order
         {4, 8, 12, 28}, // GOP Index 12 - Ref List 0
-        {-4, -20, 0, 0} // GOP Index 12 - Ref List 1
+        {-4, -20, 5, 0} // GOP Index 12 - Ref List 1
     },
     {
         5, // GOP Index 13 - Temporal Layer
         15, // GOP Index 13 - Decode Order
-        {1, 5, 13, 29}, // GOP Index 13 - Ref List 0
+        {1, 5, 2 ,13}, // GOP Index 13 - Ref List 0
         {-1, -3, -19, 0} // GOP Index 13 - Ref List 1
     },
     {
         4, // GOP Index 14 - Temporal Layer
         14, // GOP Index 14 - Decode Order
         {2, 4, 6, 14}, // GOP Index 14 - Ref List 0
-        {-2, -18, 0, 0} // GOP Index 14 - Ref List 1
+        {-2, -18, 3, 0} // GOP Index 14 - Ref List 1
     },
     {
         5, // GOP Index 15 - Temporal Layer
         16, // GOP Index 15 - Decode Order
-        {1, 3, 7, 15}, // GOP Index 15 - Ref List 0
-        {-1, -17, 0, 0} // GOP Index 15 - Ref List 1
+        {1, 3, 2, 7}, // GOP Index 15 - Ref List 0
+        {-1, -17, 15, 0} // GOP Index 15 - Ref List 1
     },
     {
         1, // GOP Index 16 - Temporal Layer
         1, // GOP Index 16 - Decode Order
-        {16, 32, 48, 0}, // GOP Index 16 - Ref List 0
-        {-16, 0, 0, 0} // GOP Index 16 - Ref List 1
+        {16, 32, 0, 0}, // GOP Index 16 - Ref List 0
+        {-16, 24, 20, 0} // GOP Index 16 - Ref List 1
     },
     {
         5, // GOP Index 17 - Temporal Layer
         20, // GOP Index 17 - Decode Order
-        {1, 17, 33, 0}, // GOP Index 17 - Ref List 0
+        {1, 17, 2, 33}, // GOP Index 17 - Ref List 0
         {-1, -3, -7, 0} // GOP Index 17 - Ref List 1
     },
     {
@@ -501,7 +503,7 @@ PredictionStructureConfigEntry six_level_hierarchical_pred_struct[] = {
     {
         5, // GOP Index 19 - Temporal Layer
         21, // GOP Index 19 - Decode Order
-        {1, 3, 19, 35}, // GOP Index 19 - Ref List 0
+        {1, 3, 2, 19}, // GOP Index 19 - Ref List 0
         {-1, -5, -13, 0} // GOP Index 19 - Ref List 1
     },
     {
@@ -513,7 +515,7 @@ PredictionStructureConfigEntry six_level_hierarchical_pred_struct[] = {
     {
         5, // GOP Index 21 - Temporal Layer
         23, // GOP Index 21 - Decode Order
-        {1, 5, 21, 37}, // GOP Index 21 - Ref List 0
+        {1, 5, 2, 21}, // GOP Index 21 - Ref List 0
         {-1, -3, -11, 0} // GOP Index 21 - Ref List 1
     },
     {
@@ -525,19 +527,19 @@ PredictionStructureConfigEntry six_level_hierarchical_pred_struct[] = {
     {
         5, // GOP Index 23 - Temporal Layer
         24, // GOP Index 23 - Decode Order
-        {1, 3, 7, 23}, // GOP Index 23 - Ref List 0
+        {1, 3, 2, 7}, // GOP Index 23 - Ref List 0
         {-1, -9, 0, 0} // GOP Index 23 - Ref List 1
     },
     {
         2, // GOP Index 24 - Temporal Layer
         17, // GOP Index 24 - Decode Order
         {8, 16, 24, 0}, // GOP Index 24 - Ref List 0
-        {-8, 0, 0, 0} // GOP Index 24 - Ref List 1
+        {-8, 10, 9, 0} // GOP Index 24 - Ref List 1
     },
     {
         5, // GOP Index 25 - Temporal Layer
         27, // GOP Index 25 - Decode Order
-        {1, 9, 25, 0}, // GOP Index 25 - Ref List 0
+        {1, 9, 2, 25}, // GOP Index 25 - Ref List 0
         {-1, -3, -7, 0} // GOP Index 25 - Ref List 1
     },
     {
@@ -549,32 +551,32 @@ PredictionStructureConfigEntry six_level_hierarchical_pred_struct[] = {
     {
         5, // GOP Index 27 - Temporal Layer
         28, // GOP Index 27 - Decode Order
-        {1, 3, 11, 27}, // GOP Index 27 - Ref List 0
+        {1, 3, 2, 11}, // GOP Index 27 - Ref List 0
         {-1, -5, 0, 0} // GOP Index 27 - Ref List 1
     },
     {
         3, // GOP Index 28 - Temporal Layer
         25, // GOP Index 28 - Decode Order
         {4, 8, 12, 28}, // GOP Index 28 - Ref List 0
-        {-4, 0, 0, 0} // GOP Index 28 - Ref List 1
+        {-4, 5, 0, 0} // GOP Index 28 - Ref List 1
     },
     {
         5, // GOP Index 29 - Temporal Layer
         30, // GOP Index 29 - Decode Order
-        {1, 5, 13, 29}, // GOP Index 29 - Ref List 0
+        {1, 5, 2 ,13}, // GOP Index 29 - Ref List 0
         {-1, -3, 0, 0} // GOP Index 29 - Ref List 1
     },
     {
         4, // GOP Index 30 - Temporal Layer
         29, // GOP Index 30 - Decode Order
         {2, 4, 6, 14}, // GOP Index 30 - Ref List 0
-        {-2, 0, 0, 0} // GOP Index 30 - Ref List 1
+        {-2, 3, 0, 0} // GOP Index 30 - Ref List 1
     },
     {
         5, // GOP Index 31 - Temporal Layer
         31, // GOP Index 31 - Decode Order
-        {1, 3, 7, 15}, // GOP Index 31 - Ref List 0
-        {-1, 0, 0, 0} // GOP Index 31 - Ref List 1
+        {1, 3, 2, 7}, // GOP Index 31 - Ref List 0
+        {-1, 15, 0, 0} // GOP Index 31 - Ref List 1
     }};
 
 /************************************************
@@ -1039,7 +1041,7 @@ static EbErrorType prediction_structure_ctor(
             // AV1 supports 4 forward and 3 backward maximum.
             // For low delay b case, will use the first 3 refs in L0 as refs in L0 and L1.
             predictionStructurePtr->pred_struct_entry_ptr_array[entry_index]
-                ->ref_list0.reference_list_count = (predType == EB_PRED_LOW_DELAY_B)
+                ->ref_list0.reference_list_count = (predType == EB_PRED_LOW_DELAY_B || predType == EB_PRED_LOW_DELAY_P)
                 ? MIN(3, ref_index)
                 : ref_index;
 
@@ -1183,7 +1185,7 @@ static EbErrorType prediction_structure_ctor(
                 ++ref_index;
             // Set Reference List 0 Count
             predictionStructurePtr->pred_struct_entry_ptr_array[entry_index]
-                ->ref_list0.reference_list_count = (predType == EB_PRED_LOW_DELAY_B)
+                ->ref_list0.reference_list_count = (predType == EB_PRED_LOW_DELAY_B || predType == EB_PRED_LOW_DELAY_P)
                 ? MIN(3, ref_index)
                 : ref_index;
 
@@ -1771,11 +1773,125 @@ static EbErrorType prediction_structure_ctor(
     return EB_ErrorNone;
 }
 
+uint32_t tot_past_refs[MAX_TEMPORAL_LAYERS] = {0,0,0,0,0,0};
+/*
+ returns max number of references from past mni-gops
+*/
+void  get_past_refs(PredictionStructureConfig *prediction_structure_config_array)
+{
+/*5L
+  |0|16|32|48| ........ |240|256|
+*/
+
+    for (uint32_t hierarchical=0;   hierarchical < MAX_TEMPORAL_LAYERS; hierarchical++) {
+
+        int steady_state_mg_end = 256; //far enough to reach all  references
+        int steady_state_mg_start = steady_state_mg_end - prediction_structure_config_array[hierarchical].entry_count;
+        int past_ref_arr[128];
+        uint8_t tot_past = 0;
+        for (uint32_t gop_i = 0; gop_i < prediction_structure_config_array[hierarchical].entry_count; ++gop_i) {
+
+            int disp_num = gop_i == 0 ?
+                prediction_structure_config_array[hierarchical].entry_count + steady_state_mg_start :
+                gop_i + steady_state_mg_start;
+
+            for (uint32_t listi = 0; listi < 2; ++listi) {
+
+                int32_t *ref_diff_list = (listi == 0) ?
+                    prediction_structure_config_array[hierarchical].entry_array[gop_i].ref_list0 :
+                    prediction_structure_config_array[hierarchical].entry_array[gop_i].ref_list1;
+
+                for (uint32_t i = 0; i < MAX_REF_IDX; ++i) {
+                    int ref_diff = ref_diff_list[i];
+                    //if the ref is used
+                    if (ref_diff > 0) {
+                        int ref_num = disp_num - ref_diff;
+                        int is_ref_outside_curr_mg = ref_num <= steady_state_mg_start ? 1 : 0;
+                        if (is_ref_outside_curr_mg) {
+                            uint8_t ref_already_there = 0;
+                            for (int j = 0; j < tot_past; j++) {
+                                if (ref_num == past_ref_arr[j]) {
+                                    ref_already_there = 1;
+                                    break;
+                                }
+                            }
+                            if (!ref_already_there)
+                                past_ref_arr[tot_past++] = ref_num;
+                        }
+                    }
+                }
+            }
+        }
+        tot_past_refs[hierarchical] = tot_past;
+    }
+
+
+}
+/* count number of refs in a steady state MG*/
+uint32_t  get_num_refs_in_one_mg(PredictionStructure *pred_struct)
+{
+    uint32_t steady_state_pic_count = pred_struct->pred_struct_period;
+    uint32_t terminating_entry_index = pred_struct->steady_state_index + steady_state_pic_count;
+
+    uint32_t tot_refs = 0;
+    for (uint32_t entry_index = pred_struct->steady_state_index; entry_index < terminating_entry_index; ++entry_index)
+        if(pred_struct->pred_struct_entry_ptr_array[entry_index]->is_referenced)
+            tot_refs++;
+
+    return tot_refs;
+}
+
 static void prediction_structure_group_dctor(EbPtr p) {
     PredictionStructureGroup *obj = (PredictionStructureGroup *)p;
     EB_DELETE_PTR_ARRAY(obj->prediction_structure_ptr_array, obj->prediction_structure_count);
     PredictionStructureConfigArray *array = (PredictionStructureConfigArray *)obj->priv;
     EB_DELETE(array);
+}
+
+typedef struct MrpInitCtrls {
+    EbBool enable;                  // MRP ON/OFF
+    uint8_t ref_count_used_base;    //number of reference to use in each ref list for     base pictures
+    uint8_t ref_count_used_non_base;//number of reference to use in each ref list for non base pictures
+} MrpInitCtrls;
+/*This controls MRP setting at init time. run time setting should be within the init settings*/
+void set_mrp_init_ctrls( MrpInitCtrls* ctrls, uint8_t  level) {
+
+
+    switch (level)
+    {
+    case 0: //OFF
+        ctrls->enable = 0;
+        ctrls->ref_count_used_base = 1;
+        ctrls->ref_count_used_non_base = 1;
+        break;
+    case 1: //FULL ON
+        ctrls->enable = 1;
+        ctrls->ref_count_used_base = MAX_REF_IDX;
+        ctrls->ref_count_used_non_base = MAX_REF_IDX;
+        break;
+    case 2:
+        ctrls->enable = 1;
+        ctrls->ref_count_used_base = MAX_REF_IDX;
+        ctrls->ref_count_used_non_base = 3;
+        break;
+    case 3:
+        ctrls->enable = 1;
+        ctrls->ref_count_used_base = MAX_REF_IDX;
+        ctrls->ref_count_used_non_base = 2;
+        break;
+    case 4:
+        ctrls->enable = 1;
+        ctrls->ref_count_used_base = MAX_REF_IDX;
+        ctrls->ref_count_used_non_base = 1;
+        break;
+
+    default:
+        ctrls->enable = 0;
+        ctrls->ref_count_used_base = 1;
+        ctrls->ref_count_used_non_base = 1;
+        assert(0);
+        break;
+    }
 }
 /*************************************************
  * Prediction Structure Group Ctor
@@ -1798,6 +1914,7 @@ static void prediction_structure_group_dctor(EbPtr p) {
  *************************************************/
 
 EbErrorType prediction_structure_group_ctor(PredictionStructureGroup *pred_struct_group_ptr,
+    uint8_t   mrp_init_level,
                                             EbEncMode enc_mode, EbSvtAv1EncConfiguration *config) {
     uint32_t pred_struct_index = 0;
     uint32_t ref_idx;
@@ -1806,7 +1923,69 @@ EbErrorType prediction_structure_group_ctor(PredictionStructureGroup *pred_struc
     uint32_t number_of_references;
 
     pred_struct_group_ptr->dctor = prediction_structure_group_dctor;
-    uint8_t ref_count_used       = enc_mode <= ENC_M4 ? MAX_REF_IDX : enc_mode <= ENC_M5 ? 2 : 1;
+
+    MrpInitCtrls mrp_init_ctrls;
+    set_mrp_init_ctrls(&mrp_init_ctrls, mrp_init_level);
+    uint8_t ref_count_used = mrp_init_ctrls.ref_count_used_non_base;
+    uint8_t ref_count_used_base = mrp_init_ctrls.ref_count_used_base;
+
+
+    (void)enc_mode;
+    if (mrp_init_level == 1)
+    {
+
+        {
+            int32_t ref_list0_tmp[] = { 1, 9, 2, 17 }; // GOP Index 1 - Ref List 0
+            memcpy(five_level_hierarchical_pred_struct[1].ref_list0, ref_list0_tmp, REF_LIST_MAX_DEPTH * sizeof(int32_t));
+        }
+        {
+            int32_t ref_list0_tmp[] = { 1, 5, 2, 13 }; // GOP Index 5 - Ref List 0
+            memcpy(five_level_hierarchical_pred_struct[5].ref_list0, ref_list0_tmp, REF_LIST_MAX_DEPTH * sizeof(int32_t));
+        }
+        {
+            int32_t ref_list0_tmp[] = { 1, 3, 2, 7 }; // GOP Index 7 - Ref List 0
+            memcpy(five_level_hierarchical_pred_struct[7].ref_list0, ref_list0_tmp, REF_LIST_MAX_DEPTH * sizeof(int32_t));
+        }
+        {
+            int32_t ref_list0_tmp[] = { 1, 9, 2, 17 }; // GOP Index 9 - Ref List 0
+            memcpy(five_level_hierarchical_pred_struct[9].ref_list0, ref_list0_tmp, REF_LIST_MAX_DEPTH * sizeof(int32_t));
+        }
+        {
+            int32_t ref_list1_tmp[] = { -4, 5, 0, 0 }; // GOP Index 12 - Ref List 1
+            memcpy(five_level_hierarchical_pred_struct[12].ref_list1, ref_list1_tmp, REF_LIST_MAX_DEPTH * sizeof(int32_t));
+        }
+        {
+            int32_t ref_list0_tmp[] = { 1, 5, 2, 13 }; // GOP Index 13 - Ref List 0
+            memcpy(five_level_hierarchical_pred_struct[13].ref_list0, ref_list0_tmp, REF_LIST_MAX_DEPTH * sizeof(int32_t));
+        }
+        {
+            int32_t ref_list1_tmp[] = { -2, 3, 0, 0 }; // GOP Index 14 - Ref List 1
+            memcpy(five_level_hierarchical_pred_struct[14].ref_list1, ref_list1_tmp, REF_LIST_MAX_DEPTH * sizeof(int32_t));
+        }
+        {
+            int32_t ref_list0_tmp[] = { 1, 3, 2, 7 }; // GOP Index 15 - Ref List 0
+            memcpy(five_level_hierarchical_pred_struct[15].ref_list0, ref_list0_tmp, REF_LIST_MAX_DEPTH * sizeof(int32_t));
+        }
+
+
+        {
+            int32_t ref_list0_tmp[] = { 1, 3, 5, 2 };// GOP Index 1 - Ref List 0
+            memcpy(four_level_hierarchical_pred_struct[1].ref_list0, ref_list0_tmp, REF_LIST_MAX_DEPTH * sizeof(int32_t));
+        }
+        {
+            int32_t ref_list0_tmp[] = { 1, 3, 5, 2 };// GOP Index 5 - Ref List 0
+            memcpy(four_level_hierarchical_pred_struct[5].ref_list0, ref_list0_tmp, REF_LIST_MAX_DEPTH * sizeof(int32_t));
+
+        }
+        {
+            int32_t ref_list0_tmp[] = { 1, 3, 5, 2 };// GOP Index 7 - Ref List 0
+            memcpy(four_level_hierarchical_pred_struct[7].ref_list0, ref_list0_tmp, REF_LIST_MAX_DEPTH * sizeof(int32_t));
+
+        }
+
+    }
+
+
 
     PredictionStructureConfigArray *config_array;
     EB_NEW(config_array, prediction_structure_config_array_ctor);
@@ -1873,6 +2052,22 @@ EbErrorType prediction_structure_group_ctor(PredictionStructureGroup *pred_struc
             }
         }
     }
+
+    if (ref_count_used_base < MAX_REF_IDX) {
+        uint8_t gop_i = 0;
+        for (int i = ref_count_used_base; i < MAX_REF_IDX; ++i) {
+            prediction_structure_config_array[3].entry_array[gop_i].ref_list0[i] = 0;
+            prediction_structure_config_array[3].entry_array[gop_i].ref_list1[i] = 0;
+            prediction_structure_config_array[4].entry_array[gop_i].ref_list0[i] = 0;
+            prediction_structure_config_array[4].entry_array[gop_i].ref_list1[i] = 0;
+            prediction_structure_config_array[5].entry_array[gop_i].ref_list0[i] = 0;
+            prediction_structure_config_array[5].entry_array[gop_i].ref_list1[i] = 0;
+
+        }
+    }
+
+
+    get_past_refs(prediction_structure_config_array);
 
     // Count the number of Prediction Structures
     while ((prediction_structure_config_array[pred_struct_index].entry_array != 0) &&

@@ -30,6 +30,8 @@ typedef struct SequenceControlSet {
     EbDctor dctor;
     /*!< Encoding context pointer containing the handle pointer */
     EncodeContext *encode_context_ptr;
+     /*!< 2ndpass enc mode, available at firstpass encoder */
+     int8_t enc_mode_2ndpass;
 
     /*!< API structure */
     EbSvtAv1EncConfiguration static_config;
@@ -68,8 +70,6 @@ typedef struct SequenceControlSet {
     /*!< Number of delay frames needed to implement future window
          for algorithms such as SceneChange or TemporalFiltering */
     uint32_t scd_delay;
-    /*!< Enable the use of altrefs in the stream */
-    int8_t tf_level;
     /*!<  */
     EbBlockMeanPrec block_mean_calc_prec;
     /*!< CDF (The signal changes per preset; 0: CDF update, 1: no CDF update) Default is 0.*/
@@ -77,9 +77,17 @@ typedef struct SequenceControlSet {
     /*!< Down-sampling method @ ME and alt-ref temporal filtering
         (The signal changes per preset; 0: filtering, 1: decimation) Default is 0. */
     uint8_t down_sampling_method_me_search;
-    /*!< Use in loop motion estimation
-         Default is 0. */
-    uint8_t in_loop_me;
+
+    /*  1..15    | 17..31  | 33..47  |
+              16 |       32|       48|
+      lad mg=2: delay the first MG (1-16) until the next 2 MGs(17-48) are gop , TF, and ME ready
+    */
+    uint8_t lad_mg;   //delay all pictures within a given MG, until N future MGs are  gop , TF, and ME ready
+    /*!< 1: Specifies that loop restoration filter should use boundary pixels in the search.  Must be
+            set at the sequence level because it requires a buffer allocation to copy the pixels
+            to be used in the search.
+         0: Specifies that loop restoration filter should not use boundary pixels in the search.*/
+    uint8_t use_boundaries_in_rest_search;
     uint8_t enable_pic_mgr_dec_order; // if enabled: pic mgr starts pictures in dec order
     uint8_t enable_dec_order; // if enabled: encoding are in dec order
     /*!< Use in loop motion OIS
@@ -151,6 +159,8 @@ typedef struct SequenceControlSet {
     uint32_t me_segment_row_count_array[MAX_TEMPORAL_LAYERS];
     uint32_t enc_dec_segment_col_count_array[MAX_TEMPORAL_LAYERS];
     uint32_t enc_dec_segment_row_count_array[MAX_TEMPORAL_LAYERS];
+    uint32_t tpl_segment_col_count_array;
+    uint32_t tpl_segment_row_count_array;
     uint32_t cdef_segment_column_count;
     uint32_t cdef_segment_row_count;
     uint32_t rest_segment_column_count;
@@ -162,6 +172,7 @@ typedef struct SequenceControlSet {
     uint32_t picture_control_set_pool_init_count;
     uint32_t me_pool_init_count;
     uint32_t picture_control_set_pool_init_count_child;
+    uint32_t enc_dec_pool_init_count;
     uint32_t pa_reference_picture_buffer_init_count;
     uint32_t reference_picture_buffer_init_count;
     uint32_t input_buffer_fifo_init_count;
@@ -176,7 +187,7 @@ typedef struct SequenceControlSet {
     uint32_t motion_estimation_fifo_init_count;
     uint32_t initial_rate_control_fifo_init_count;
     uint32_t picture_demux_fifo_init_count;
-    uint32_t in_loop_me_fifo_init_count;
+    uint32_t tpl_disp_fifo_init_count;
     uint32_t rate_control_tasks_fifo_init_count;
     uint32_t rate_control_fifo_init_count;
     uint32_t mode_decision_configuration_fifo_init_count;
@@ -196,7 +207,7 @@ typedef struct SequenceControlSet {
     uint32_t dlf_process_init_count;
     uint32_t cdef_process_init_count;
     uint32_t rest_process_init_count;
-    uint32_t inlme_process_init_count;
+    uint32_t tpl_disp_process_init_count;
     uint32_t total_process_init_count;
     int32_t  lap_enabled;
     TWO_PASS twopass;
@@ -205,6 +216,11 @@ typedef struct SequenceControlSet {
     Dequants deq_bd; // follows input bit depth
     Quants   quants_8bit; // 8bit
     Dequants deq_8bit; // 8bit
+    ScaleFactors sf_identity;
+    uint8_t  mrp_init_level; //sequence based MRP level
+    int32_t nmv_vec_cost[MV_JOINTS];
+    int32_t nmv_costs[2][MV_VALS];
+    uint8_t mvrate_set;
 } SequenceControlSet;
 
 typedef struct EbSequenceControlSetInitData {

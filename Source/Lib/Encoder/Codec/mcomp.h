@@ -122,6 +122,7 @@ typedef int(fractional_mv_step_fp)(MacroBlockD *xd, const struct AV1Common *cons
                                    int_mv *last_mv_search_list);
 
 extern fractional_mv_step_fp svt_av1_find_best_sub_pixel_tree;
+extern fractional_mv_step_fp svt_av1_find_best_sub_pixel_tree_pruned;
 
 static INLINE void svt_av1_set_subpel_mv_search_range(SubpelMvLimits *    subpel_limits,
                                                       const FullMvLimits *mv_limits,

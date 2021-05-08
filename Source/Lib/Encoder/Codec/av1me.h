@@ -58,7 +58,10 @@ typedef unsigned int (*AomSadFn)(const uint8_t *a, int a_stride, const uint8_t *
 
 typedef unsigned int (*AomVarianceFn)(const uint8_t *a, int a_stride, const uint8_t *b,
                                       int b_stride, unsigned int *sse);
-
+typedef unsigned int(*AomSubpixVarianceFn)(const uint8_t *a, int a_stride,
+    int xoffset, int yoffset,
+    const uint8_t *b, int b_stride,
+    unsigned int *sse);
 typedef void (*AomSadMultiDFn)(const uint8_t *a, int a_stride, const uint8_t *const b_array[],
                                int b_stride, unsigned int *sad_array);
 
@@ -66,6 +69,7 @@ typedef struct aom_variance_vtable {
     AomSadFn                sdf;
     AomVarianceFn           vf;
     AomVarianceFn           vf_hbd_10;
+    AomSubpixVarianceFn     svf;
     AomSadMultiDFn          sdx4df;
     AomObmcSadFn            osdf;
     AomObmcVarianceFn       ovf;

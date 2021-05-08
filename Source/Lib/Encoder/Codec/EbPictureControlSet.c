@@ -24,8 +24,7 @@ void *svt_aom_memalign(size_t align, size_t size);
 void  svt_aom_free(void *memblk);
 void *svt_aom_malloc(size_t size);
 
-EbErrorType svt_av1_alloc_restoration_buffers(Av1Common *cm);
-
+EbErrorType svt_av1_alloc_restoration_buffers(PictureControlSet *pcs , Av1Common *cm);
 EbErrorType svt_av1_hash_table_create(HashTable *p_hash_table);
 
 static void set_restoration_unit_size(int32_t width, int32_t height, int32_t sx, int32_t sy,
@@ -93,7 +92,18 @@ EbErrorType me_sb_results_ctor(MeSbResults *obj_ptr) {
     EB_MALLOC_ARRAY(obj_ptr->total_me_candidate_index, SQUARE_PU_COUNT);
     return EB_ErrorNone;
 }
+void recon_coef_dctor(EbPtr p) {
+    EncDecSet *obj = (EncDecSet *)p;
 
+    EB_DELETE(obj->recon_picture16bit_ptr);
+    EB_DELETE(obj->recon_picture_ptr);
+
+    for (uint16_t sb_index = 0; sb_index < obj->sb_total_count_unscaled; ++sb_index) {
+        EB_DELETE(obj->quantized_coeff[sb_index]); //OMK2
+
+    }
+        EB_DELETE_PTR_ARRAY(obj->quantized_coeff, obj->sb_total_count_unscaled);
+}
 void picture_control_set_dctor(EbPtr p) {
     PictureControlSet *obj      = (PictureControlSet *)p;
     uint16_t           tile_cnt = obj->tile_row_count * obj->tile_column_count;
@@ -120,7 +130,6 @@ void picture_control_set_dctor(EbPtr p) {
     EB_DELETE_PTR_ARRAY(obj->luma_dc_sign_level_coeff_neighbor_array, tile_cnt);
     EB_DELETE_PTR_ARRAY(obj->cr_dc_sign_level_coeff_neighbor_array, tile_cnt);
     EB_DELETE_PTR_ARRAY(obj->cb_dc_sign_level_coeff_neighbor_array, tile_cnt);
-    EB_DELETE_PTR_ARRAY(obj->inter_pred_dir_neighbor_array, tile_cnt);
     EB_DELETE_PTR_ARRAY(obj->ref_frame_type_neighbor_array, tile_cnt);
     EB_DELETE_PTR_ARRAY(obj->intra_luma_mode_neighbor_array, tile_cnt);
     EB_DELETE_PTR_ARRAY(obj->txfm_context_array, tile_cnt);
@@ -136,8 +145,6 @@ void picture_control_set_dctor(EbPtr p) {
 
     for (depth = 0; depth < NEIGHBOR_ARRAY_TOTAL_COUNT; depth++) {
         EB_DELETE_PTR_ARRAY(obj->md_intra_luma_mode_neighbor_array[depth], tile_cnt);
-        EB_DELETE_PTR_ARRAY(obj->md_intra_chroma_mode_neighbor_array[depth], tile_cnt);
-        EB_DELETE_PTR_ARRAY(obj->md_mv_neighbor_array[depth], tile_cnt);
         EB_DELETE_PTR_ARRAY(obj->md_skip_flag_neighbor_array[depth], tile_cnt);
         EB_DELETE_PTR_ARRAY(obj->md_mode_type_neighbor_array[depth], tile_cnt);
         EB_DELETE_PTR_ARRAY(obj->mdleaf_partition_neighbor_array[depth], tile_cnt);
@@ -160,17 +167,28 @@ void picture_control_set_dctor(EbPtr p) {
         EB_DELETE_PTR_ARRAY(obj->md_cr_dc_sign_level_coeff_neighbor_array[depth], tile_cnt);
         EB_DELETE_PTR_ARRAY(obj->md_cb_dc_sign_level_coeff_neighbor_array[depth], tile_cnt);
         EB_DELETE_PTR_ARRAY(obj->md_txfm_context_array[depth], tile_cnt);
-        EB_DELETE_PTR_ARRAY(obj->md_inter_pred_dir_neighbor_array[depth], tile_cnt);
         EB_DELETE_PTR_ARRAY(obj->md_ref_frame_type_neighbor_array[depth], tile_cnt);
         EB_DELETE_PTR_ARRAY(obj->md_interpolation_type_neighbor_array[depth], tile_cnt);
     }
     EB_DELETE_PTR_ARRAY(obj->sb_ptr_array, obj->sb_total_count_unscaled);
     EB_DELETE(obj->bitstream_ptr);
     EB_DELETE_PTR_ARRAY(obj->entropy_coding_info, tile_cnt);
-    EB_DELETE(obj->recon_picture16bit_ptr);
-    EB_DELETE(obj->recon_picture_ptr);
     EB_DELETE(obj->film_grain_picture16bit_ptr);
     EB_DELETE(obj->film_grain_picture_ptr);
+    EB_DELETE(obj->temp_lf_recon_picture_ptr);
+    EB_DELETE(obj->temp_lf_recon_picture16bit_ptr);
+
+    const int32_t num_planes = 3; // av1_num_planes(cm);
+    for (int32_t pl = 0; pl < num_planes; ++pl) {
+        RestorationInfo *            ri         = obj->rst_info + pl;
+        RestorationStripeBoundaries *boundaries = &ri->boundaries;
+        EB_FREE_ARRAY(ri->unit_info);
+        EB_FREE(boundaries->stripe_boundary_above);
+        EB_FREE(boundaries->stripe_boundary_below);
+    }
+    EB_FREE_ARRAY(obj->rusi_picture[0]);
+    EB_FREE_ARRAY(obj->rusi_picture[1]);
+    EB_FREE_ARRAY(obj->rusi_picture[2]);
     EB_DELETE(obj->input_frame16bit);
 
     EB_FREE_ARRAY(obj->mse_seg[0]);
@@ -241,6 +259,119 @@ EbErrorType alloc_palette_tokens(SequenceControlSet *scs_ptr, PictureControlSet 
 
     return EB_ErrorNone;
 }
+
+EbErrorType recon_coef_ctor(EncDecSet *object_ptr, EbPtr object_init_data_ptr) {
+    PictureControlSetInitData *init_data_ptr = (PictureControlSetInitData *)object_init_data_ptr;
+
+    EbPictureBufferDescInitData input_pic_buf_desc_init_data;
+
+    // Max/Min CU Sizes
+
+    // SBs
+    const uint16_t picture_sb_width = (uint16_t)(
+        (init_data_ptr->picture_width + init_data_ptr->sb_sz - 1) / init_data_ptr->sb_sz);
+    const uint16_t picture_sb_height = (uint16_t)(
+        (init_data_ptr->picture_height + init_data_ptr->sb_sz - 1) / init_data_ptr->sb_sz);
+    uint16_t    sb_index;
+    uint16_t    sb_origin_x;
+    uint16_t    sb_origin_y;
+
+    EbBool         is_16bit      = init_data_ptr->bit_depth > 8 ? EB_TRUE : EB_FALSE;
+
+
+
+    //object_ptr->tile_row_count  = init_data_ptr->tile_row_count;
+    //object_ptr->tile_column_count = init_data_ptr->tile_column_count;
+
+    object_ptr->dctor = recon_coef_dctor;
+
+
+
+    // Init Picture Init data
+    input_pic_buf_desc_init_data.max_width          = init_data_ptr->picture_width;
+    input_pic_buf_desc_init_data.max_height         = init_data_ptr->picture_height;
+    input_pic_buf_desc_init_data.bit_depth          = init_data_ptr->bit_depth;
+    input_pic_buf_desc_init_data.buffer_enable_mask = PICTURE_BUFFER_DESC_FULL_MASK;
+    input_pic_buf_desc_init_data.color_format       = init_data_ptr->color_format;
+    uint16_t padding = init_data_ptr->sb_size_pix + 32;
+    input_pic_buf_desc_init_data.left_padding  = padding;
+    input_pic_buf_desc_init_data.right_padding = padding;
+    input_pic_buf_desc_init_data.top_padding   = padding;
+    input_pic_buf_desc_init_data.bot_padding   = padding;
+    input_pic_buf_desc_init_data.split_mode = EB_FALSE;
+
+    //object_ptr->scs_wrapper_ptr = (EbObjectWrapper *)NULL;
+
+    object_ptr->recon_picture16bit_ptr = (EbPictureBufferDesc *)NULL;
+    object_ptr->recon_picture_ptr      = (EbPictureBufferDesc *)NULL; //OMK
+    //object_ptr->color_format           = init_data_ptr->color_format;
+    // Reconstructed Picture Buffer
+    if (is_16bit) {
+        EB_NEW(object_ptr->recon_picture16bit_ptr,
+               svt_recon_picture_buffer_desc_ctor,
+               (EbPtr)&input_pic_buf_desc_init_data);
+    } else {
+        EB_NEW(object_ptr->recon_picture_ptr, //OMK
+               svt_recon_picture_buffer_desc_ctor,
+               (EbPtr)&input_pic_buf_desc_init_data);
+    }
+    if (init_data_ptr->is_16bit_pipeline && !is_16bit) {
+        EB_NEW(object_ptr->recon_picture16bit_ptr,
+               svt_recon_picture_buffer_desc_ctor,
+               (EbPtr)&input_pic_buf_desc_init_data);
+    }
+
+
+    // SB Array
+   // object_ptr->sb_total_count          = picture_sb_width * picture_sb_height;
+    object_ptr->sb_total_count_unscaled = picture_sb_width * picture_sb_height;
+    EB_ALLOC_PTR_ARRAY(object_ptr->quantized_coeff, object_ptr->sb_total_count_unscaled);
+
+    sb_origin_x = 0;
+    sb_origin_y = 0;
+
+    const uint16_t picture_sb_w = (uint16_t)(
+        (init_data_ptr->picture_width + init_data_ptr->sb_size_pix - 1) /
+        init_data_ptr->sb_size_pix);
+    const uint16_t picture_sb_h = (uint16_t)(
+        (init_data_ptr->picture_height + init_data_ptr->sb_size_pix - 1) /
+        init_data_ptr->sb_size_pix);
+    const uint16_t all_sb = picture_sb_w * picture_sb_h;
+
+
+    //object_ptr->sb_total_count_pix = all_sb;
+
+    EbPictureBufferDescInitData coeff_init_data;
+    coeff_init_data.buffer_enable_mask = PICTURE_BUFFER_DESC_FULL_MASK;
+    coeff_init_data.max_width          = init_data_ptr->sb_size_pix;
+    coeff_init_data.max_height         = init_data_ptr->sb_size_pix;
+    coeff_init_data.bit_depth          = EB_32BIT;
+    coeff_init_data.color_format       = init_data_ptr->color_format;
+    coeff_init_data.left_padding       = 0;
+    coeff_init_data.right_padding      = 0;
+    coeff_init_data.top_padding        = 0;
+    coeff_init_data.bot_padding        = 0;
+    coeff_init_data.split_mode         = EB_FALSE;
+    for (sb_index = 0; sb_index < all_sb; ++sb_index) {
+
+
+
+    EB_NEW(object_ptr->quantized_coeff[sb_index], //OMK2
+           svt_picture_buffer_desc_ctor,
+           (EbPtr)&coeff_init_data);
+
+        // Increment the Order in coding order (Raster Scan Order)
+        sb_origin_y = (sb_origin_x == picture_sb_w - 1) ? sb_origin_y + 1 : sb_origin_y;
+        sb_origin_x = (sb_origin_x == picture_sb_w - 1) ? 0 : sb_origin_x + 1;
+    }
+
+    return EB_ErrorNone;
+}
+
+uint8_t get_loop_filter_mode(EbEncMode enc_mode, uint8_t is_used_as_reference_flag) ;
+
+uint8_t get_enable_restoration(EbEncMode enc_mode) ;
+
 EbErrorType picture_control_set_ctor(PictureControlSet *object_ptr, EbPtr object_init_data_ptr) {
     PictureControlSetInitData *init_data_ptr = (PictureControlSetInitData *)object_init_data_ptr;
 
@@ -278,12 +409,11 @@ EbErrorType picture_control_set_ctor(PictureControlSet *object_ptr, EbPtr object
     input_pic_buf_desc_init_data.bit_depth          = init_data_ptr->bit_depth;
     input_pic_buf_desc_init_data.buffer_enable_mask = PICTURE_BUFFER_DESC_FULL_MASK;
     input_pic_buf_desc_init_data.color_format       = init_data_ptr->color_format;
-
-    input_pic_buf_desc_init_data.left_padding  = PAD_VALUE;
-    input_pic_buf_desc_init_data.right_padding = PAD_VALUE;
-    input_pic_buf_desc_init_data.top_padding   = PAD_VALUE;
-    input_pic_buf_desc_init_data.bot_padding   = PAD_VALUE;
-
+    uint16_t padding = init_data_ptr->sb_size_pix + 32;
+    input_pic_buf_desc_init_data.left_padding  = padding;
+    input_pic_buf_desc_init_data.right_padding = padding;
+    input_pic_buf_desc_init_data.top_padding   = padding;
+    input_pic_buf_desc_init_data.bot_padding   = padding;
     input_pic_buf_desc_init_data.split_mode = EB_FALSE;
 
     coeff_buffer_desc_init_data.max_width          = init_data_ptr->picture_width;
@@ -292,34 +422,17 @@ EbErrorType picture_control_set_ctor(PictureControlSet *object_ptr, EbPtr object
     coeff_buffer_desc_init_data.buffer_enable_mask = PICTURE_BUFFER_DESC_FULL_MASK;
     coeff_buffer_desc_init_data.color_format       = init_data_ptr->color_format;
 
-    coeff_buffer_desc_init_data.left_padding  = PAD_VALUE;
-    coeff_buffer_desc_init_data.right_padding = PAD_VALUE;
-    coeff_buffer_desc_init_data.top_padding   = PAD_VALUE;
-    coeff_buffer_desc_init_data.bot_padding   = PAD_VALUE;
-
+    coeff_buffer_desc_init_data.left_padding  = padding;
+    coeff_buffer_desc_init_data.right_padding = padding;
+    coeff_buffer_desc_init_data.top_padding   = padding;
+    coeff_buffer_desc_init_data.bot_padding   = padding;
     coeff_buffer_desc_init_data.split_mode        = EB_FALSE;
     coeff_buffer_desc_init_data.is_16bit_pipeline = init_data_ptr->is_16bit_pipeline;
 
     object_ptr->scs_wrapper_ptr = (EbObjectWrapper *)NULL;
 
-    object_ptr->recon_picture16bit_ptr = (EbPictureBufferDesc *)NULL;
-    object_ptr->recon_picture_ptr      = (EbPictureBufferDesc *)NULL;
     object_ptr->color_format           = init_data_ptr->color_format;
     // Reconstructed Picture Buffer
-    if (is_16bit) {
-        EB_NEW(object_ptr->recon_picture16bit_ptr,
-               svt_recon_picture_buffer_desc_ctor,
-               (EbPtr)&coeff_buffer_desc_init_data);
-    } else {
-        EB_NEW(object_ptr->recon_picture_ptr,
-               svt_recon_picture_buffer_desc_ctor,
-               (EbPtr)&input_pic_buf_desc_init_data);
-    }
-    if (init_data_ptr->is_16bit_pipeline && !is_16bit) {
-        EB_NEW(object_ptr->recon_picture16bit_ptr,
-               svt_recon_picture_buffer_desc_ctor,
-               (EbPtr)&coeff_buffer_desc_init_data);
-    }
     // Film Grain Picture Buffer
     if (init_data_ptr->film_grain_noise_level) {
         if (is_16bit) {
@@ -331,6 +444,65 @@ EbErrorType picture_control_set_ctor(PictureControlSet *object_ptr, EbPtr object
                    svt_recon_picture_buffer_desc_ctor,
                    (EbPtr)&input_pic_buf_desc_init_data);
         }
+    }
+    uint8_t lf_recon_needed = 0;
+    if (init_data_ptr->tile_row_count > 0 || init_data_ptr->tile_column_count > 0)
+        lf_recon_needed = 1;
+    else
+        for (uint8_t is_used_as_reference_flag = 0; is_used_as_reference_flag < 2; is_used_as_reference_flag++) {
+            lf_recon_needed = get_loop_filter_mode(init_data_ptr->enc_mode, is_used_as_reference_flag) >= 2 ? 1 : 0;
+            if (lf_recon_needed)
+                break;
+        }
+
+    EbColorFormat color_format = init_data_ptr->color_format;
+    object_ptr->temp_lf_recon_picture16bit_ptr = (EbPictureBufferDesc *)NULL;
+    object_ptr->temp_lf_recon_picture_ptr      = (EbPictureBufferDesc *)NULL;
+    if (lf_recon_needed){
+    EbPictureBufferDescInitData temp_lf_recon_desc_init_data;
+    temp_lf_recon_desc_init_data.max_width          = (uint16_t)init_data_ptr->picture_width;
+    temp_lf_recon_desc_init_data.max_height         = (uint16_t)init_data_ptr->picture_height;
+    temp_lf_recon_desc_init_data.buffer_enable_mask = PICTURE_BUFFER_DESC_FULL_MASK;
+
+    temp_lf_recon_desc_init_data.left_padding  = padding;
+    temp_lf_recon_desc_init_data.right_padding = padding;
+    temp_lf_recon_desc_init_data.top_padding   = padding;
+    temp_lf_recon_desc_init_data.bot_padding   = padding;
+    temp_lf_recon_desc_init_data.split_mode   = EB_FALSE;
+    temp_lf_recon_desc_init_data.color_format = color_format;
+
+    if (init_data_ptr->is_16bit_pipeline || is_16bit) {
+        temp_lf_recon_desc_init_data.bit_depth = EB_16BIT;
+        EB_NEW(object_ptr->temp_lf_recon_picture16bit_ptr,
+               svt_recon_picture_buffer_desc_ctor,
+               (EbPtr)&temp_lf_recon_desc_init_data);
+        if (!is_16bit)
+            object_ptr->temp_lf_recon_picture16bit_ptr->bit_depth = EB_8BIT;
+    } else {
+        temp_lf_recon_desc_init_data.bit_depth = EB_8BIT;
+        EB_NEW(object_ptr->temp_lf_recon_picture_ptr,
+               svt_recon_picture_buffer_desc_ctor,
+               (EbPtr)&temp_lf_recon_desc_init_data);
+    }
+    }
+
+    if (get_enable_restoration(init_data_ptr->enc_mode) || init_data_ptr->static_config.enable_restoration_filtering > 0) {
+    set_restoration_unit_size(init_data_ptr->picture_width,
+                              init_data_ptr->picture_height,
+                              1,
+                              1,
+                              object_ptr->rst_info);
+
+    return_error = svt_av1_alloc_restoration_buffers(object_ptr,init_data_ptr->av1_cm);
+
+    int32_t ntiles[2];
+    for (int32_t is_uv = 0; is_uv < 2; ++is_uv)
+        ntiles[is_uv] =
+            object_ptr->rst_info[is_uv].units_per_tile; //CHKN res_tiles_in_plane
+    assert(ntiles[1] <= ntiles[0]);
+    EB_CALLOC_ARRAY(object_ptr->rusi_picture[0], ntiles[0]);
+    EB_CALLOC_ARRAY(object_ptr->rusi_picture[1], ntiles[1]);
+    EB_CALLOC_ARRAY(object_ptr->rusi_picture[2], ntiles[1]);
     }
 
     if ((is_16bit) || (init_data_ptr->is_16bit_pipeline)) {
@@ -378,6 +550,7 @@ EbErrorType picture_control_set_ctor(PictureControlSet *object_ptr, EbPtr object
                (uint16_t)(sb_origin_x * max_blk_size),
                (uint16_t)(sb_origin_y * max_blk_size),
                (uint16_t)sb_index,
+               init_data_ptr->enc_mode,
                object_ptr);
         // Increment the Order in coding order (Raster Scan Order)
         sb_origin_y = (sb_origin_x == picture_sb_w - 1) ? sb_origin_y + 1 : sb_origin_y;
@@ -395,8 +568,6 @@ EbErrorType picture_control_set_ctor(PictureControlSet *object_ptr, EbPtr object
     uint8_t depth;
     for (depth = 0; depth < NEIGHBOR_ARRAY_TOTAL_COUNT; depth++) {
         EB_ALLOC_PTR_ARRAY(object_ptr->md_intra_luma_mode_neighbor_array[depth], total_tile_cnt);
-        EB_ALLOC_PTR_ARRAY(object_ptr->md_intra_chroma_mode_neighbor_array[depth], total_tile_cnt);
-        EB_ALLOC_PTR_ARRAY(object_ptr->md_mv_neighbor_array[depth], total_tile_cnt);
         EB_ALLOC_PTR_ARRAY(object_ptr->md_skip_flag_neighbor_array[depth], total_tile_cnt);
         EB_ALLOC_PTR_ARRAY(object_ptr->md_mode_type_neighbor_array[depth], total_tile_cnt);
         EB_ALLOC_PTR_ARRAY(object_ptr->mdleaf_partition_neighbor_array[depth], total_tile_cnt);
@@ -409,7 +580,6 @@ EbErrorType picture_control_set_ctor(PictureControlSet *object_ptr, EbPtr object
         EB_ALLOC_PTR_ARRAY(object_ptr->md_cb_dc_sign_level_coeff_neighbor_array[depth],
                            total_tile_cnt);
         EB_ALLOC_PTR_ARRAY(object_ptr->md_txfm_context_array[depth], total_tile_cnt);
-        EB_ALLOC_PTR_ARRAY(object_ptr->md_inter_pred_dir_neighbor_array[depth], total_tile_cnt);
         EB_ALLOC_PTR_ARRAY(object_ptr->md_ref_frame_type_neighbor_array[depth], total_tile_cnt);
         if (init_data_ptr->hbd_mode_decision != EB_10_BIT_MD) {
             EB_ALLOC_PTR_ARRAY(object_ptr->md_luma_recon_neighbor_array[depth], total_tile_cnt);
@@ -443,24 +613,6 @@ EbErrorType picture_control_set_ctor(PictureControlSet *object_ptr, EbPtr object
                  PU_NEIGHBOR_ARRAY_GRANULARITY,
                  PU_NEIGHBOR_ARRAY_GRANULARITY,
                  NEIGHBOR_ARRAY_UNIT_TOP_AND_LEFT_ONLY_MASK},
-                {
-                    &object_ptr->md_intra_chroma_mode_neighbor_array[depth][tile_idx],
-                    MAX_PICTURE_WIDTH_SIZE >> subsampling_x,
-                    MAX_PICTURE_HEIGHT_SIZE >> subsampling_y,
-                    sizeof(uint8_t),
-                    PU_NEIGHBOR_ARRAY_GRANULARITY,
-                    PU_NEIGHBOR_ARRAY_GRANULARITY,
-                    NEIGHBOR_ARRAY_UNIT_TOP_AND_LEFT_ONLY_MASK,
-                },
-                {
-                    &object_ptr->md_mv_neighbor_array[depth][tile_idx],
-                    MAX_PICTURE_WIDTH_SIZE,
-                    MAX_PICTURE_HEIGHT_SIZE,
-                    sizeof(MvUnit),
-                    PU_NEIGHBOR_ARRAY_GRANULARITY,
-                    PU_NEIGHBOR_ARRAY_GRANULARITY,
-                    NEIGHBOR_ARRAY_UNIT_FULL_MASK,
-                },
                 {
                     &object_ptr->md_skip_flag_neighbor_array[depth][tile_idx],
                     MAX_PICTURE_WIDTH_SIZE,
@@ -534,15 +686,6 @@ EbErrorType picture_control_set_ctor(PictureControlSet *object_ptr, EbPtr object
                     MAX_PICTURE_WIDTH_SIZE,
                     MAX_PICTURE_HEIGHT_SIZE,
                     sizeof(TXFM_CONTEXT),
-                    PU_NEIGHBOR_ARRAY_GRANULARITY,
-                    PU_NEIGHBOR_ARRAY_GRANULARITY,
-                    NEIGHBOR_ARRAY_UNIT_TOP_AND_LEFT_ONLY_MASK,
-                },
-                {
-                    &object_ptr->md_inter_pred_dir_neighbor_array[depth][tile_idx],
-                    MAX_PICTURE_WIDTH_SIZE,
-                    MAX_PICTURE_HEIGHT_SIZE,
-                    sizeof(uint8_t),
                     PU_NEIGHBOR_ARRAY_GRANULARITY,
                     PU_NEIGHBOR_ARRAY_GRANULARITY,
                     NEIGHBOR_ARRAY_UNIT_TOP_AND_LEFT_ONLY_MASK,
@@ -699,7 +842,6 @@ EbErrorType picture_control_set_ctor(PictureControlSet *object_ptr, EbPtr object
     EB_ALLOC_PTR_ARRAY(object_ptr->luma_dc_sign_level_coeff_neighbor_array, total_tile_cnt);
     EB_ALLOC_PTR_ARRAY(object_ptr->cr_dc_sign_level_coeff_neighbor_array, total_tile_cnt);
     EB_ALLOC_PTR_ARRAY(object_ptr->cb_dc_sign_level_coeff_neighbor_array, total_tile_cnt);
-    EB_ALLOC_PTR_ARRAY(object_ptr->inter_pred_dir_neighbor_array, total_tile_cnt);
     EB_ALLOC_PTR_ARRAY(object_ptr->ref_frame_type_neighbor_array, total_tile_cnt);
     EB_ALLOC_PTR_ARRAY(object_ptr->intra_luma_mode_neighbor_array, total_tile_cnt);
     EB_ALLOC_PTR_ARRAY(object_ptr->txfm_context_array, total_tile_cnt);
@@ -895,15 +1037,6 @@ EbErrorType picture_control_set_ctor(PictureControlSet *object_ptr, EbPtr object
                 NEIGHBOR_ARRAY_UNIT_TOP_AND_LEFT_ONLY_MASK,
             },
             {
-                &object_ptr->inter_pred_dir_neighbor_array[tile_idx],
-                MAX_PICTURE_WIDTH_SIZE,
-                MAX_PICTURE_HEIGHT_SIZE,
-                sizeof(uint8_t),
-                PU_NEIGHBOR_ARRAY_GRANULARITY,
-                PU_NEIGHBOR_ARRAY_GRANULARITY,
-                NEIGHBOR_ARRAY_UNIT_TOP_AND_LEFT_ONLY_MASK,
-            },
-            {
                 &object_ptr->ref_frame_type_neighbor_array[tile_idx],
                 MAX_PICTURE_WIDTH_SIZE,
                 MAX_PICTURE_HEIGHT_SIZE,
@@ -1053,10 +1186,25 @@ EbErrorType picture_control_set_ctor(PictureControlSet *object_ptr, EbPtr object
     }
     object_ptr->hash_table.p_lookup_table = NULL;
     svt_av1_hash_table_create(&object_ptr->hash_table);
+    if (get_enable_restoration(init_data_ptr->enc_mode)|| init_data_ptr->static_config.enable_restoration_filtering > 0)
     EB_MALLOC_ALIGNED(object_ptr->rst_tmpbuf, RESTORATION_TMPBUF_SIZE);
+
     return EB_ErrorNone;
 }
 
+
+
+
+
+EbErrorType recon_coef_creator(EbPtr *object_dbl_ptr, EbPtr object_init_data_ptr) {
+    EncDecSet *obj;
+
+    *object_dbl_ptr = NULL;
+    EB_NEW(obj, recon_coef_ctor, object_init_data_ptr);
+    *object_dbl_ptr = obj;
+
+    return EB_ErrorNone;
+}
 EbErrorType picture_control_set_creator(EbPtr *object_dbl_ptr, EbPtr object_init_data_ptr) {
     PictureControlSet *obj;
 
@@ -1075,10 +1223,6 @@ static void picture_parent_control_set_dctor(EbPtr ptr) {
         EB_DELETE(obj->chroma_downsampled_picture_ptr);
 
     EB_FREE_2D(obj->variance);
-    EB_FREE_2D(obj->y_mean);
-    EB_FREE_2D(obj->cb_mean);
-    EB_FREE_2D(obj->cr_mean);
-
     if (obj->picture_histogram) {
         for (int region_in_picture_width_index = 0;
              region_in_picture_width_index < MAX_NUMBER_OF_REGIONS_IN_WIDTH;
@@ -1114,46 +1258,32 @@ static void picture_parent_control_set_dctor(EbPtr ptr) {
     if (obj->tpl_sb_rdmult_scaling_factors)
         EB_FREE_ARRAY(obj->tpl_sb_rdmult_scaling_factors);
     EB_FREE_ARRAY(obj->rc_me_distortion);
-    // ME and OIS Distortion Histograms
-    EB_FREE_ARRAY(obj->me_distortion_histogram);
-    EB_FREE_ARRAY(obj->ois_distortion_histogram);
-    EB_FREE_ARRAY(obj->intra_sad_interval_index);
-    EB_FREE_ARRAY(obj->inter_sad_interval_index);
+    EB_FREE_ARRAY(obj->stationary_block_present_sb);
+    EB_FREE_ARRAY(obj->rc_me_allow_gm);
+    EB_FREE_ARRAY(obj->me_64x64_distortion);
+    EB_FREE_ARRAY(obj->me_32x32_distortion);
+    EB_FREE_ARRAY(obj->me_16x16_distortion);
+    EB_FREE_ARRAY(obj->me_8x8_distortion);
+    EB_FREE_ARRAY(obj->me_8x8_cost_variance);
     // Non moving index array
     EB_FREE_ARRAY(obj->non_moving_index_array);
     // SB noise variance array
-    EB_FREE_ARRAY(obj->sb_flat_noise_array);
     EB_FREE_ARRAY(obj->sb_depth_mode_array);
 
     if (obj->av1_cm) {
-        const int32_t num_planes = 3; // av1_num_planes(cm);
-        for (int32_t p = 0; p < num_planes; ++p) {
-            RestorationInfo *            ri         = obj->av1_cm->rst_info + p;
-            RestorationStripeBoundaries *boundaries = &ri->boundaries;
-            EB_FREE_ARRAY(ri->unit_info);
-            EB_FREE(boundaries->stripe_boundary_above);
-            EB_FREE(boundaries->stripe_boundary_below);
-        }
         EB_FREE_ARRAY(obj->av1_cm->frame_to_show);
         if (obj->av1_cm->rst_frame.buffer_alloc_sz) {
             EB_FREE_ARRAY(obj->av1_cm->rst_frame.buffer_alloc);
         }
         EB_FREE_ARRAY(obj->av1_cm);
     }
-    EB_FREE_ARRAY(obj->rusi_picture[0]);
-    EB_FREE_ARRAY(obj->rusi_picture[1]);
-    EB_FREE_ARRAY(obj->rusi_picture[2]);
 
     EB_FREE_ARRAY(obj->av1x);
     EB_DESTROY_MUTEX(obj->me_processed_sb_mutex);
-    EB_DESTROY_MUTEX(obj->rc_distortion_histogram_mutex);
     EB_DESTROY_SEMAPHORE(obj->temp_filt_done_semaphore);
     EB_DESTROY_MUTEX(obj->temp_filt_mutex);
     EB_DESTROY_MUTEX(obj->debug_mutex);
     EB_FREE_ARRAY(obj->tile_group_info);
-    EB_DESTROY_SEMAPHORE(obj->tpl_me_done_semaphore);
-    EB_DESTROY_MUTEX(obj->tpl_me_mutex);
-    //  EB_DESTROY_SEMAPHORE(obj->pame_done_semaphore);
     EB_DESTROY_MUTEX(obj->pame_done.mutex);
     EB_DESTROY_SEMAPHORE(obj->first_pass_done_semaphore);
     EB_DESTROY_MUTEX(obj->first_pass_mutex);
@@ -1161,6 +1291,11 @@ static void picture_parent_control_set_dctor(EbPtr ptr) {
         svt_pcs_sb_structs_dctor(obj);
         EB_DELETE(obj->enhanced_picture_ptr);
     }
+    EB_DESTROY_SEMAPHORE(obj->tpl_disp_done_semaphore);
+    EB_DESTROY_MUTEX(obj->tpl_disp_mutex);
+    uint16_t tile_cnt = 1;/*obj->tile_row_count * obj->tile_column_count;*/
+    EB_DELETE_PTR_ARRAY(obj->tpl_disp_segment_ctrl, tile_cnt);
+    EB_DESTROY_MUTEX(obj->pcs_total_rate_mutex);
 }
 EbErrorType picture_parent_control_set_ctor(PictureParentControlSet *object_ptr,
                                             EbPtr                    object_init_data_ptr) {
@@ -1217,10 +1352,6 @@ EbErrorType picture_parent_control_set_ctor(PictureParentControlSet *object_ptr,
     object_ptr->data_ll_head_ptr         = (EbLinkedListNode *)NULL;
     object_ptr->app_out_data_ll_head_ptr = (EbLinkedListNode *)NULL;
     EB_MALLOC_2D(object_ptr->variance, object_ptr->sb_total_count, MAX_ME_PU_COUNT);
-    EB_MALLOC_2D(object_ptr->y_mean, object_ptr->sb_total_count, MAX_ME_PU_COUNT);
-    EB_MALLOC_2D(object_ptr->cb_mean, object_ptr->sb_total_count, 21);
-    EB_MALLOC_2D(object_ptr->cr_mean, object_ptr->sb_total_count, 21);
-
     EB_ALLOC_PTR_ARRAY(object_ptr->picture_histogram, MAX_NUMBER_OF_REGIONS_IN_WIDTH);
 
     for (region_in_picture_width_index = 0;
@@ -1237,6 +1368,7 @@ EbErrorType picture_parent_control_set_ctor(PictureParentControlSet *object_ptr,
                          HISTOGRAM_NUMBER_OF_BINS);
         }
     }
+    if (init_data_ptr->rc_firstpass_stats_out ||  init_data_ptr->rate_control_mode)
     {
         const uint16_t picture_width_in_mb  = (uint16_t)((init_data_ptr->picture_width + 15) / 16);
         const uint16_t picture_height_in_mb = (uint16_t)((init_data_ptr->picture_height + 15) / 16);
@@ -1277,29 +1409,38 @@ EbErrorType picture_parent_control_set_ctor(PictureParentControlSet *object_ptr,
     }
 
     EB_MALLOC_ARRAY(object_ptr->rc_me_distortion, object_ptr->sb_total_count);
-    // ME and OIS Distortion Histograms
-    EB_MALLOC_ARRAY(object_ptr->me_distortion_histogram, NUMBER_OF_SAD_INTERVALS);
-    EB_MALLOC_ARRAY(object_ptr->ois_distortion_histogram, NUMBER_OF_INTRA_SAD_INTERVALS);
-    EB_MALLOC_ARRAY(object_ptr->intra_sad_interval_index, object_ptr->sb_total_count);
-    EB_MALLOC_ARRAY(object_ptr->inter_sad_interval_index, object_ptr->sb_total_count);
+    EB_MALLOC_ARRAY(object_ptr->stationary_block_present_sb, object_ptr->sb_total_count);
+    EB_MALLOC_ARRAY(object_ptr->rc_me_allow_gm, object_ptr->sb_total_count);
+    EB_MALLOC_ARRAY(object_ptr->me_64x64_distortion, object_ptr->sb_total_count);
+    EB_MALLOC_ARRAY(object_ptr->me_32x32_distortion, object_ptr->sb_total_count);
+    EB_MALLOC_ARRAY(object_ptr->me_16x16_distortion, object_ptr->sb_total_count);
+    EB_MALLOC_ARRAY(object_ptr->me_8x8_distortion, object_ptr->sb_total_count);
+
+    EB_MALLOC_ARRAY(object_ptr->me_8x8_cost_variance, object_ptr->sb_total_count);
     // Non moving index array
     EB_MALLOC_ARRAY(object_ptr->non_moving_index_array, object_ptr->sb_total_count);
     // SB noise variance array
-    EB_MALLOC_ARRAY(object_ptr->sb_flat_noise_array, object_ptr->sb_total_count);
     EB_CREATE_MUTEX(object_ptr->me_processed_sb_mutex);
-    EB_CREATE_MUTEX(object_ptr->rc_distortion_histogram_mutex);
     EB_MALLOC_ARRAY(object_ptr->sb_depth_mode_array, object_ptr->sb_total_count);
     EB_CREATE_SEMAPHORE(object_ptr->temp_filt_done_semaphore, 0, 1);
     EB_CREATE_MUTEX(object_ptr->temp_filt_mutex);
     EB_CREATE_MUTEX(object_ptr->debug_mutex);
     EB_MALLOC_ARRAY(object_ptr->av1_cm, 1);
 
-    EB_CREATE_SEMAPHORE(object_ptr->tpl_me_done_semaphore, 0, 1);
-    EB_CREATE_MUTEX(object_ptr->tpl_me_mutex);
-
     EB_CREATE_MUTEX(object_ptr->pame_done.mutex);
     EB_CREATE_SEMAPHORE(object_ptr->first_pass_done_semaphore, 0, 1);
     EB_CREATE_MUTEX(object_ptr->first_pass_mutex);
+
+    EB_CREATE_SEMAPHORE(object_ptr->tpl_disp_done_semaphore, 0, 1);
+    EB_CREATE_MUTEX(object_ptr->tpl_disp_mutex);
+
+    EB_MALLOC_ARRAY(object_ptr->tpl_disp_segment_ctrl, 1);
+    for (uint32_t tile_idx = 0; tile_idx < 1; tile_idx++) {
+        EB_NEW(object_ptr->tpl_disp_segment_ctrl[tile_idx],
+                enc_dec_segments_ctor,
+                init_data_ptr->enc_dec_segment_col,
+                init_data_ptr->enc_dec_segment_row);
+    }
     object_ptr->av1_cm->interp_filter = SWITCHABLE;
 
     object_ptr->av1_cm->mi_stride = picture_sb_width * (BLOCK_SIZE_64 / 4);
@@ -1330,27 +1471,7 @@ EbErrorType picture_parent_control_set_ctor(PictureParentControlSet *object_ptr,
     object_ptr->av1_cm->mi_rows = init_data_ptr->picture_height >> MI_SIZE_LOG2;
 
     object_ptr->av1_cm->byte_alignment = 0;
-
-    set_restoration_unit_size(init_data_ptr->picture_width,
-                              init_data_ptr->picture_height,
-                              1,
-                              1,
-                              object_ptr->av1_cm->rst_info);
-
-    return_error = svt_av1_alloc_restoration_buffers(object_ptr->av1_cm);
-
     memset(&object_ptr->av1_cm->rst_frame, 0, sizeof(Yv12BufferConfig));
-
-    int32_t ntiles[2];
-    for (int32_t is_uv = 0; is_uv < 2; ++is_uv)
-        ntiles[is_uv] =
-            object_ptr->av1_cm->rst_info[is_uv].units_per_tile; //CHKN res_tiles_in_plane
-
-    assert(ntiles[1] <= ntiles[0]);
-
-    EB_CALLOC_ARRAY(object_ptr->rusi_picture[0], ntiles[0]);
-    EB_CALLOC_ARRAY(object_ptr->rusi_picture[1], ntiles[1]);
-    EB_CALLOC_ARRAY(object_ptr->rusi_picture[2], ntiles[1]);
 
     EB_MALLOC_ARRAY(object_ptr->av1x, 1);
 
@@ -1390,7 +1511,7 @@ EbErrorType picture_parent_control_set_ctor(PictureParentControlSet *object_ptr,
     object_ptr->overshoot_seen  = 0;
     object_ptr->undershoot_seen = 0;
     object_ptr->low_cr_seen     = 0;
-
+    EB_CREATE_MUTEX(object_ptr->pcs_total_rate_mutex);
     return return_error;
 }
 static void me_dctor(EbPtr p) {

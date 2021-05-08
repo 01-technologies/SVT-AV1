@@ -133,6 +133,7 @@ typedef struct PredictionStructureGroup {
      * Declarations
      ************************************************/
 extern EbErrorType prediction_structure_group_ctor(PredictionStructureGroup *pred_struct_group_ptr,
+    uint8_t   mrp_init_level,
                                                    EbEncMode                 enc_mode,
                                                    EbSvtAv1EncConfiguration *config);
 

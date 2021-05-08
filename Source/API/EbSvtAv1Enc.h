@@ -27,7 +27,9 @@ extern "C" {
 #define MAX_HIERARCHICAL_LEVEL 6
 #define REF_LIST_MAX_DEPTH 4
 #define MAX_ENC_PRESET 8
-
+#define NUM_MV_COMPONENTS 2
+#define NUM_MV_HIST 2
+#define MAX_MV_HIST_SIZE  2 * REF_LIST_MAX_DEPTH * NUM_MV_COMPONENTS * NUM_MV_HIST
 #define DEFAULT -1
 
 #define EB_BUFFERFLAG_EOS 0x00000001 // signals the last packet of the stream
@@ -51,6 +53,25 @@ typedef struct PredictionStructureConfigEntry {
     int32_t  ref_list1[REF_LIST_MAX_DEPTH];
 } PredictionStructureConfigEntry;
 
+typedef struct TfControls {
+    uint8_t  enabled;
+    uint8_t  num_past_pics;            // Number of frame(s) from past
+    uint8_t  num_future_pics;          // Number of frame(s) from future
+    uint8_t  noise_adjust_past_pics;   // 0: noise-based adjustment OFF | 1: up to 3 additional frame(s) from the past based on the noise level
+    uint8_t  noise_adjust_future_pics; // 0: noise-based adjustment OFF | 1: up to 3 additional frame(s) from the future based on the noise level
+    uint8_t  activity_adjust_th;       // The abs diff between the histogram of the central frame and the reference frame beyond which the reference frame is removed
+    uint8_t  max_num_past_pics;        // Max number of frame(s) from past
+    uint8_t  max_num_future_pics;      // Max number of frame(s) from future
+    uint8_t  hme_me_level;             // HME/ME Search Level
+    uint8_t  half_pel_mode;            // 0: do not perform half-pel refinement     | 1: perform half-pel refinement for the 8-positions    | 2: perform half-pel refinement for only 4-positions (H and V only)
+    uint8_t  quarter_pel_mode;         // 0: do not perform quarter-pel refinement  | 1: perform quarter-pel refinement for the 8-positions | 2: perform half-pel refinement for only 4-positions (H and V only)
+    uint8_t  eight_pel_mode;           // 0: do not perform eight-pel refinement    | 1: perform eight-pel refinement for the 8-positions   | 2: eight half-pel refinement for only 4-positions (H and V only)
+    uint8_t  do_chroma;                // 0: do not filter chroma | 1: filter chroma
+    uint64_t pred_error_32x32_th;      // The 32x32 pred error (post-subpel) under which subpel for the 16x16 block(s) is bypassed
+    int64_t  me_16x16_to_8x8_dev_th;   // The 16x16-to-8x8 me-distortion deviation beyond which the number of reference frames is capped to [max_64x64_past_pics, max_64x64_future_pics] @ the level of a 64x64 Block
+    uint64_t max_64x64_past_pics;      // The max number of past reference frames if me_16x16_to_8x8_dev > me_16x16_to_8x8_dev_th
+    uint64_t max_64x64_future_pics;    // The max number of future reference frames if me_16x16_to_8x8_dev > me_16x16_to_8x8_dev_th
+} TfControls;
 // super-res modes
 typedef enum {
     SUPERRES_NONE, // No frame superres allowed.
@@ -226,7 +247,7 @@ typedef struct EbSvtAv1EncConfiguration {
     *
     * Default is 0.*/
     EbBool use_qp_file;
-#if FTR_ENABLE_FIXED_QINDEX_OFFSETS
+
     /* use fixed qp offset for every picture based on temporal layer index
     *
     * Default is 0.*/
@@ -235,7 +256,7 @@ typedef struct EbSvtAv1EncConfiguration {
     int32_t key_frame_chroma_qindex_offset;
     int32_t key_frame_qindex_offset;
     int32_t chroma_qindex_offsets[EB_MAX_TEMPORAL_LAYERS];
-#endif
+
     /* input buffer for the second pass */
     SvtAv1FixedBuf rc_twopass_stats_in;
     /* generate first pass stats output.
@@ -437,12 +458,6 @@ typedef struct EbSvtAv1EncConfiguration {
     *
     * Default is 1. */
     EbBool ext_block_flag;
-
-    /* Flag to enable the use of recon pictures for motion estimation
-    *
-    * Default is 1. */
-    EbBool in_loop_me_flag;
-
     // ME Parameters
     /* Number of search positions in the horizontal direction.
      *
@@ -482,6 +497,7 @@ typedef struct EbSvtAv1EncConfiguration {
      *
      * Default is 1. */
     uint32_t scene_change_detection;
+
     /* When RateControlMode is set to 1 it's best to set this parameter to be
      * equal to the Intra period value (such is the default set by the encoder).
      * When CQP is chosen, then a (2 * minigopsize +1) look ahead is recommended.
@@ -489,7 +505,7 @@ typedef struct EbSvtAv1EncConfiguration {
      * Default depends on rate control mode.*/
     uint32_t look_ahead_distance;
 
-    /* Enable TPL in look ahead, only works when look_ahead_distance>0
+    /* Enable TPL in look ahead
      * 0 = disable TPL in look ahead
      * 1 = enable TPL in look ahead
      * Default is 0  */
@@ -541,7 +557,10 @@ typedef struct EbSvtAv1EncConfiguration {
      * ALLOW_RECODE_KFMAXBW = 1, Allow recode for KF and exceeding maximum frame bandwidth.
      * ALLOW_RECODE_KFARFGF = 2, Allow recode only for KF/ARF/GF frames.
      * ALLOW_RECODE = 3, Allow recode for all frames based on bitrate constraints.
-     * default is 2 */
+     * ALLOW_RECODE_DEFAULT = 4, Default setting, ALLOW_RECODE_KFARFGF for M0~5 and
+     *                                            ALLOW_RECODE_KFMAXBW for M6~8.
+     * default is 4
+     */
     uint32_t recode_loop;
 
     /* Flag to signal the content being a screen sharing content type
@@ -560,7 +579,7 @@ typedef struct EbSvtAv1EncConfiguration {
 
     /* Enable adaptive quantization within a frame using segmentation.
      *
-     * Default is FALSE. */
+     * Default is 2. */
     EbBool enable_adaptive_quantization;
 
     // Tresholds
@@ -697,11 +716,10 @@ typedef struct EbSvtAv1EncConfiguration {
 
     /* Variables to control the use of ALT-REF (temporally filtered frames)
     */
-    // -1: Default; 0: OFF; 1: ON; 2 and 3: Faster levels
+    // -1: Default; 0: OFF; 1: ON
     int8_t  tf_level;
-    uint8_t altref_strength;
-    uint8_t altref_nframes;
     EbBool  enable_overlays;
+    TfControls tf_params_per_type[3]; // [I_SLICE][BASE][L1]
 
     // super-resolution parameters
     uint8_t superres_mode;
@@ -720,6 +738,34 @@ typedef struct EbSvtAv1EncConfiguration {
    *
    * Default is 0. */
     int32_t manual_pred_struct_entry_num;
+
+    // Color description
+    /* Color description present flag
+    *
+    * It is not necessary to set this parameter manually.
+    * It is set internally to true once one of the color_primaries, transfer_characteristics or
+    * matrix coefficients is set to non-default value.
+    *
+    Default is false. */
+    EbBool color_description_present_flag;
+    /* Color primaries
+    *
+    Default is 2 (CP_UNSPECIFIED). */
+    uint8_t color_primaries;
+    /* Transfer characteristics
+    *
+    Default is 2 (TC_UNSPECIFIED). */
+    uint8_t transfer_characteristics;
+    /* Matrix coefficients
+    *
+    Default is 2 (MC_UNSPECIFIED). */
+    uint8_t matrix_coefficients;
+    /* Color range
+    *
+    * 0: studio swing.
+    * 1: full swing.
+    Default is 0. */
+    uint8_t color_range;
 } EbSvtAv1EncConfiguration;
 
 /* STEP 1: Call the library to construct a Component Handle.

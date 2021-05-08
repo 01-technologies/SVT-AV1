@@ -560,19 +560,7 @@ static const vector<EbBool> invalid_ext_block_flag = {
     // none
 };
 
-/* Flag to enable the use of recon pictures for motion estimation
- *
- * Default is 0. */
-static const vector<EbBool> default_in_loop_me_flag = {
-    EB_FALSE,
-};
-static const vector<EbBool> valid_in_loop_me_flag = {
-    EB_FALSE,
-    EB_TRUE,
-};
-static const vector<EbBool> invalid_in_loop_me_flag = {
-    // none
-};
+
 
 // ME Parameters
 /* Number of search positions in the horizontal direction.
@@ -657,30 +645,6 @@ static const vector<uint32_t> invalid_scene_change_detection = {
     2,
 };
 
-/* When RateControlMode is set to 1 it's best to set this parameter to be
- * equal to the Intra period value (such is the default set by the encoder).
- * When CQP is chosen, then a (2 * minigopsize +1) look ahead is recommended.
- *
- * Default depends on rate control mode.*/
-static const vector<uint32_t> default_look_ahead_distance = {
-    (uint32_t)~0,
-};
-static const vector<uint32_t> valid_look_ahead_distance = {
-    (uint32_t)~0,
-    0,
-    1,
-    10,
-    24,
-    25,
-    30,
-    60,
-    MAX_LAD,
-};
-static const vector<uint32_t> invalid_look_ahead_distance = {
-    /* look_ahead_distance override in code
-    MAX_LAD + 1, ((uint32_t)~0 - 1)
-    */
-    };
 
 /* Target bitrate in bits/second, only apllicable when rate control mode is
  * set to 1.
@@ -1072,6 +1036,76 @@ static const vector<uint8_t> invalid_superres_denom = {7};
 static const vector<uint8_t> default_superres_kf_denom = {8};
 static const vector<uint8_t> valid_superres_kf_denom = {8, 9, 10, 11, 12, 13, 14, 15, 16};
 static const vector<uint8_t> invalid_superres_kf_denom = {7};
+
+// Color description
+/* Color range
+ */
+static const vector<uint32_t> default_color_range = {0};
+static const vector<uint32_t> valid_color_range = {0, 1};
+static const vector<uint32_t> invalid_color_range = {};
+
+/* Color primaries
+ */
+static const vector<uint32_t> default_color_primaries = {2};
+static const vector<uint32_t> valid_color_primaries = {
+    1,
+    2,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    22,
+};
+static const vector<uint32_t> invalid_color_primaries = {/*none*/};
+
+/* Transfer characteristics
+ */
+static const vector<uint32_t> default_transfer_characteristics = {2};
+static const vector<uint32_t> valid_transfer_characteristics = {
+    1,
+    2,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+};
+static const vector<uint32_t> invalid_transfer_characteristics = {/*none*/};
+
+/* Matrix coeffricients
+ */
+static const vector<uint32_t> default_matrix_coefficients = {2};
+static const vector<uint32_t> valid_matrix_coefficients = {
+    1,
+    2,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+};
+static const vector<uint32_t> invalid_matrix_coefficients = {0}; // not actually invalid, but requires 4:4:4
 
 }  // namespace svt_av1_test_params
 

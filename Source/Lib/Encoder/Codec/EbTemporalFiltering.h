@@ -17,7 +17,7 @@
 #include "EbMotionEstimationProcess.h"
 
 // ALT-REF debug-specific defines
-#define DEBUG_TF 0
+
 
 #define COLOR_CHANNELS 3
 #define C_Y 0
@@ -88,7 +88,6 @@
 #define THRES_DIFF_HIGH 12000
 
 #define OD_DIVU_DMAX (1024)
-#define AHD_TH_WEIGHT 33
 #ifdef __cplusplus
 extern "C" {
 #endif

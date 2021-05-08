@@ -120,8 +120,7 @@ void cdef_seg_search(PictureControlSet *pcs_ptr, SequenceControlSet *scs_ptr,
     int32_t  nhfb        = (mi_cols + MI_SIZE_64X64 - 1) / MI_SIZE_64X64;
     int32_t  pri_damping = 3 + (frm_hdr->quantization_params.base_q_idx >> 6);
     int32_t  sec_damping = pri_damping;
-
-    const int32_t num_planes = 3;
+    const int32_t num_planes      = pcs_ptr->parent_pcs_ptr->cdef_level >= 5 ? 2 : 3;
     DECLARE_ALIGNED(32, uint16_t, inbuf[CDEF_INBUF_SIZE]);
     uint16_t *in;
     DECLARE_ALIGNED(32, uint8_t, tmp_dst[1 << (MAX_SB_SIZE_LOG2 * 2)]);
@@ -130,8 +129,7 @@ void cdef_seg_search(PictureControlSet *pcs_ptr, SequenceControlSet *scs_ptr,
     int32_t          end_gi;
     CDEF_PICK_METHOD pick_method = pcs_ptr->parent_pcs_ptr->cdef_level == 2 ? CDEF_FAST_SEARCH_LVL1
         : pcs_ptr->parent_pcs_ptr->cdef_level == 3                          ? CDEF_FAST_SEARCH_LVL2
-        : pcs_ptr->parent_pcs_ptr->cdef_level == 4                          ? CDEF_FAST_SEARCH_LVL3
-                                                                            : 0;
+        : (pcs_ptr->parent_pcs_ptr->cdef_level > 3) ?  CDEF_FAST_SEARCH_LVL3 : 0;
 
     EbPictureBufferDesc *input_picture_ptr = (EbPictureBufferDesc *)
                                                  pcs_ptr->parent_pcs_ptr->enhanced_picture_ptr;
@@ -141,7 +139,7 @@ void cdef_seg_search(PictureControlSet *pcs_ptr, SequenceControlSet *scs_ptr,
                                  pcs_ptr->parent_pcs_ptr->reference_picture_wrapper_ptr->object_ptr)
                                 ->reference_picture;
     else
-        recon_picture_ptr = pcs_ptr->recon_picture_ptr;
+       recon_picture_ptr =  pcs_ptr->parent_pcs_ptr->enc_dec_ptr->recon_picture_ptr;
 
     for (pli = 0; pli < num_planes; pli++) {
         int32_t subsampling_x = (pli == 0) ? 0 : 1;
@@ -167,6 +165,10 @@ void cdef_seg_search(PictureControlSet *pcs_ptr, SequenceControlSet *scs_ptr,
 
     for (fbr = y_b64_start_idx; fbr < y_b64_end_idx; ++fbr) {
         for (fbc = x_b64_start_idx; fbc < x_b64_end_idx; ++fbc) {
+
+            uint64_t best_sse[2] = { MAX_MODE_COST , MAX_MODE_COST };
+            int32_t best_gi[2] = { 0,0 };
+            int32_t gi_offset[2] = { 6,2 };
             int32_t nvb, nhb;
             int32_t gi;
             int32_t dirinit    = 0;
@@ -202,7 +204,6 @@ void cdef_seg_search(PictureControlSet *pcs_ptr, SequenceControlSet *scs_ptr,
             // No filtering if the entire filter block is skipped
             if (svt_sb_all_skip(pcs_ptr, cm, fbr * MI_SIZE_64X64, fbc * MI_SIZE_64X64))
                 continue;
-
             cdef_count = svt_sb_compute_cdef_list(
                 pcs_ptr, cm, fbr * MI_SIZE_64X64, fbc * MI_SIZE_64X64, dlist, bs);
 
@@ -228,6 +229,20 @@ void cdef_seg_search(PictureControlSet *pcs_ptr, SequenceControlSet *scs_ptr,
                 end_gi   = nb_cdef_strengths[pick_method];
 
                 for (gi = start_gi; gi < end_gi; gi++) {
+                    if (pcs_ptr->parent_pcs_ptr->cdef_level >= 6) {
+
+                        if (gi > start_gi + gi_offset[pli ? 1 : 0]) {
+                            if (best_gi[pli ? 1 : 0] == start_gi) {
+                                if (pli < 2)
+                                    pcs_ptr->mse_seg[pli][fbr * nhfb + fbc][gi] = MAX_MODE_COST;
+                                else
+                                    pcs_ptr->mse_seg[1][fbr * nhfb + fbc][gi] += MAX_MODE_COST;
+
+                                continue;
+
+                            }
+                        }
+                    }
                     int32_t  threshold;
                     uint64_t curr_mse;
                     int32_t  sec_strength;
@@ -270,6 +285,10 @@ void cdef_seg_search(PictureControlSet *pcs_ptr, SequenceControlSet *scs_ptr,
                         pcs_ptr->mse_seg[pli][fbr * nhfb + fbc][gi] = curr_mse;
                     else
                         pcs_ptr->mse_seg[1][fbr * nhfb + fbc][gi] += curr_mse;
+                    if (curr_mse < best_sse[pli ? 1 : 0]) {
+                        best_sse[pli ? 1 : 0] = curr_mse;
+                        best_gi[pli ? 1 : 0] = gi;
+                    }
                 }
 
                 //if (ppcs->picture_number == 15)
@@ -285,7 +304,7 @@ void cdef_seg_search16bit(PictureControlSet *pcs_ptr, SequenceControlSet *scs_pt
                                           EB_TRUE)
         ? ((EbReferenceObject *)pcs_ptr->parent_pcs_ptr->reference_picture_wrapper_ptr->object_ptr)
               ->reference_picture16bit
-        : pcs_ptr->recon_picture16bit_ptr;
+        :  pcs_ptr->parent_pcs_ptr->enc_dec_ptr->recon_picture16bit_ptr;
 
     struct PictureParentControlSet *ppcs    = pcs_ptr->parent_pcs_ptr;
     FrameHeader *                   frm_hdr = &ppcs->frm_hdr;
@@ -307,11 +326,9 @@ void cdef_seg_search16bit(PictureControlSet *pcs_ptr, SequenceControlSet *scs_pt
 
     int32_t mi_rows = ppcs->av1_cm->mi_rows;
     int32_t mi_cols = ppcs->av1_cm->mi_cols;
-
     CDEF_PICK_METHOD pick_method = pcs_ptr->parent_pcs_ptr->cdef_level == 2 ? CDEF_FAST_SEARCH_LVL1
         : pcs_ptr->parent_pcs_ptr->cdef_level == 3                          ? CDEF_FAST_SEARCH_LVL2
-        : pcs_ptr->parent_pcs_ptr->cdef_level == 4                          ? CDEF_FAST_SEARCH_LVL3
-                                                                            : 0;
+        : (pcs_ptr->parent_pcs_ptr->cdef_level > 3) ?  CDEF_FAST_SEARCH_LVL3 : 0;
     uint32_t         fbr, fbc;
     uint16_t *       src[3];
     uint16_t *       ref_coeff[3];
@@ -332,8 +349,7 @@ void cdef_seg_search16bit(PictureControlSet *pcs_ptr, SequenceControlSet *scs_pt
     int32_t          nhfb        = (mi_cols + MI_SIZE_64X64 - 1) / MI_SIZE_64X64;
     int32_t          pri_damping = 3 + (frm_hdr->quantization_params.base_q_idx >> 6);
     int32_t          sec_damping = pri_damping;
-
-    const int32_t num_planes = 3;
+    const int32_t num_planes      = pcs_ptr->parent_pcs_ptr->cdef_level >= 5 ? 2 : 3;
     DECLARE_ALIGNED(32, uint16_t, inbuf[CDEF_INBUF_SIZE]);
     uint16_t *in;
     DECLARE_ALIGNED(32, uint16_t, tmp_dst[1 << (MAX_SB_SIZE_LOG2 * 2)]);
@@ -365,6 +381,9 @@ void cdef_seg_search16bit(PictureControlSet *pcs_ptr, SequenceControlSet *scs_pt
 
     for (fbr = y_b64_start_idx; fbr < y_b64_end_idx; ++fbr) {
         for (fbc = x_b64_start_idx; fbc < x_b64_end_idx; ++fbc) {
+            uint64_t best_sse[2] = { MAX_MODE_COST , MAX_MODE_COST };
+            int32_t best_gi[2] = { 0,0 };
+            int32_t gi_offset[2] = { 6,2 };
             int32_t nvb, nhb;
             int32_t gi;
             int32_t dirinit    = 0;
@@ -399,7 +418,6 @@ void cdef_seg_search16bit(PictureControlSet *pcs_ptr, SequenceControlSet *scs_pt
             // No filtering if the entire filter block is skipped
             if (svt_sb_all_skip(pcs_ptr, cm, fbr * MI_SIZE_64X64, fbc * MI_SIZE_64X64))
                 continue;
-
             cdef_count = svt_sb_compute_cdef_list(
                 pcs_ptr, cm, fbr * MI_SIZE_64X64, fbc * MI_SIZE_64X64, dlist, bs);
 
@@ -425,6 +443,20 @@ void cdef_seg_search16bit(PictureControlSet *pcs_ptr, SequenceControlSet *scs_pt
                 end_gi   = nb_cdef_strengths[pick_method];
 
                 for (gi = start_gi; gi < end_gi; gi++) {
+                    if (pcs_ptr->parent_pcs_ptr->cdef_level >= 6) {
+
+                        if (gi > start_gi + gi_offset[pli ? 1 : 0]) {
+                            if (best_gi[pli ? 1 : 0] == start_gi) {
+                                if (pli < 2)
+                                    pcs_ptr->mse_seg[pli][fbr * nhfb + fbc][gi] = MAX_MODE_COST;
+                                else
+                                    pcs_ptr->mse_seg[1][fbr * nhfb + fbc][gi] += MAX_MODE_COST;
+
+                                continue;
+
+                            }
+                        }
+                    }
                     int32_t  threshold;
                     uint64_t curr_mse;
                     int32_t  sec_strength;
@@ -467,6 +499,10 @@ void cdef_seg_search16bit(PictureControlSet *pcs_ptr, SequenceControlSet *scs_pt
                         pcs_ptr->mse_seg[pli][fbr * nhfb + fbc][gi] = curr_mse;
                     else
                         pcs_ptr->mse_seg[1][fbr * nhfb + fbc][gi] += curr_mse;
+                    if (curr_mse < best_sse[pli ? 1 : 0]) {
+                        best_sse[pli ? 1 : 0] = curr_mse;
+                        best_gi[pli ? 1 : 0] = gi;
+                    }
                 }
             }
         }
@@ -543,29 +579,6 @@ void *cdef_kernel(void *input_ptr) {
 
             if (scs_ptr->seq_header.enable_restoration) {
                 svt_av1_loop_restoration_save_boundary_lines(cm->frame_to_show, cm, 1);
-
-                //are these still needed here?/!!!
-                svt_extend_frame(cm->frame_to_show->buffers[0],
-                                 cm->frame_to_show->crop_widths[0],
-                                 cm->frame_to_show->crop_heights[0],
-                                 cm->frame_to_show->strides[0],
-                                 RESTORATION_BORDER,
-                                 RESTORATION_BORDER,
-                                 scs_ptr->static_config.is_16bit_pipeline || is_16bit);
-                svt_extend_frame(cm->frame_to_show->buffers[1],
-                                 cm->frame_to_show->crop_widths[1],
-                                 cm->frame_to_show->crop_heights[1],
-                                 cm->frame_to_show->strides[1],
-                                 RESTORATION_BORDER,
-                                 RESTORATION_BORDER,
-                                 scs_ptr->static_config.is_16bit_pipeline || is_16bit);
-                svt_extend_frame(cm->frame_to_show->buffers[2],
-                                 cm->frame_to_show->crop_widths[1],
-                                 cm->frame_to_show->crop_heights[1],
-                                 cm->frame_to_show->strides[1],
-                                 RESTORATION_BORDER,
-                                 RESTORATION_BORDER,
-                                 scs_ptr->static_config.is_16bit_pipeline || is_16bit);
             }
 
             pcs_ptr->rest_segments_column_count = scs_ptr->rest_segment_column_count;

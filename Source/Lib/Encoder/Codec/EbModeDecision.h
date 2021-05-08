@@ -40,52 +40,22 @@ struct ModeDecisionContext;
     * Mode Decision Candidate
     **************************************/
 typedef struct ModeDecisionCandidate {
-    // *Warning - this struct has been organized to be cache efficient when being
-    //    constructured in the function GenerateAmvpMergeInterIntraMdCandidatesCU.
-    //    Changing the ordering could affect performance
-    union {
-        struct {
-            unsigned me_distortion : 20;
-            unsigned distortion_ready : 1;
-            unsigned : 2;
-            unsigned intra_luma_mode : 8; // HEVC mode, use pred_mode for AV1
-        };
-        uint32_t ois_results;
-    };
-    union {
-        struct {
-            union {
-                struct {
-                    int16_t motion_vector_xl0; //Note: Do not change the order of these fields
-                    int16_t motion_vector_yl0;
-                };
-                uint32_t mvs_l0;
-            };
-            union {
-                struct {
-                    int16_t motion_vector_xl1; //Note: Do not change the order of these fields
-                    int16_t motion_vector_yl1;
-                };
-                uint32_t mvs_l1;
-            };
-        };
-        uint64_t mvs;
-    };
-
+    uint8_t intra_luma_mode;   // HEVC mode, use pred_mode for AV1
+    int16_t motion_vector_xl0;
+    int16_t motion_vector_yl0;
+    int16_t motion_vector_xl1;
+    int16_t motion_vector_yl1;
     uint8_t      skip_flag;
-    EbBool       merge_flag;
+    EbBool       skip_mode_allowed;
     uint16_t     count_non_zero_coeffs;
     uint8_t      type;
     PaletteInfo *palette_info;
-    // MD Rate Estimation Ptr
-    MdRateEstimationContext *md_rate_estimation_ptr; // 64 bits
     uint64_t                 fast_luma_rate;
     uint64_t                 fast_chroma_rate;
     uint64_t                 total_rate;
     uint32_t                 luma_fast_distortion;
     uint64_t                 full_distortion;
     EbPtr                    prediction_context_ptr;
-    PictureControlSet *      pcs_ptr;
     EbPredDirection          prediction_direction
         [MAX_NUM_OF_PU_PER_CU]; // 2 bits // Hsan: does not seem to be used why not removed ?
 
@@ -93,11 +63,10 @@ typedef struct ModeDecisionCandidate {
         [MAX_NUM_OF_REF_PIC_LIST]; // 16 bits // Hsan: does not seem to be used why not removed ?
     int16_t motion_vector_pred_y
         [MAX_NUM_OF_REF_PIC_LIST]; // 16 bits // Hsan: does not seem to be used why not removed ?
-    uint8_t  motion_vector_pred_idx[MAX_NUM_OF_REF_PIC_LIST]; // 2 bits
     uint8_t  block_has_coeff; // ?? bit - determine empirically
     uint8_t  u_has_coeff; // ?? bit
     uint8_t  v_has_coeff; // ?? bit
-    uint32_t y_has_coeff; // Issue, should be less than 32
+    uint16_t y_has_coeff; // Issue, should be less than 32
 
     PredictionMode pred_mode; // AV1 mode, no need to convert
     uint8_t        drl_index;
@@ -115,21 +84,14 @@ typedef struct ModeDecisionCandidate {
     int32_t cfl_alpha_signs;
 
     // Inter Mode
-    PredictionMode         inter_mode;
     EbBool                 is_compound;
     uint8_t                ref_frame_type;
-    uint8_t                ref_mv_index;
-    int8_t                 ref_frame_index_l0;
-    int8_t                 ref_frame_index_l1;
-    EbBool                 is_new_mv;
     TxType                 transform_type[MAX_TXB_COUNT];
     TxType                 transform_type_uv;
     MacroblockPlane        candidate_plane[MAX_MB_PLANE];
     uint16_t               eob[MAX_MB_PLANE][MAX_TXB_COUNT];
     int32_t                quantized_dc[3][MAX_TXB_COUNT];
     uint32_t               interp_filters;
-    uint8_t                txb_width;
-    uint8_t                txb_height;
     MotionMode             motion_mode;
     uint16_t               num_proj_ref;
     EbBool                 local_warp_valid;
@@ -153,13 +115,15 @@ typedef EbErrorType (*EbPredictionFunc)(uint8_t                             hbd_
                                         struct ModeDecisionContext *        context_ptr,
                                         PictureControlSet *                 pcs_ptr,
                                         struct ModeDecisionCandidateBuffer *candidate_buffer_ptr);
-typedef uint64_t (*EbFastCostFunc)(BlkStruct *                   blk_ptr,
+typedef uint64_t (*EbFastCostFunc)(
+                                   struct ModeDecisionContext *context_ptr,
+                                   BlkStruct *                   blk_ptr,
                                    struct ModeDecisionCandidate *candidate_buffer, uint32_t qp,
                                    uint64_t luma_distortion, uint64_t chroma_distortion,
                                    uint64_t lambda, PictureControlSet *pcs_ptr,
                                    CandidateMv *ref_mv_stack, const BlockGeom *blk_geom,
                                    uint32_t miRow, uint32_t miCol, uint8_t enable_inter_intra,
-                                   uint8_t md_pass, uint32_t left_neighbor_mode,
+                                   uint32_t left_neighbor_mode,
                                    uint32_t top_neighbor_mode);
 
 typedef EbErrorType (*EB_FULL_COST_FUNC)(
@@ -260,8 +224,6 @@ struct CodingLoopContext_s;
 uint8_t                 get_ref_frame_idx(uint8_t ref_type);
 extern MvReferenceFrame svt_get_ref_frame_type(uint8_t list, uint8_t ref_idx);
 uint8_t                 get_list_idx(uint8_t ref_type);
-void                    angle_estimation(const uint8_t *src, int src_stride, int rows, int cols,
-                                         uint8_t *directional_mode_skip_mask);
 #ifdef __cplusplus
 }
 #endif

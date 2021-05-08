@@ -31,7 +31,7 @@ extern EbErrorType clip_mv(uint32_t blk_origin_x, uint32_t blk_origin_y, int16_t
                            int16_t *mv_y, uint32_t picture_width, uint32_t picture_height,
                            uint32_t tb_size);
 void               init_xd(PictureControlSet *pcs_ptr, struct ModeDecisionContext *context_ptr);
-void               generate_av1_mvp_table(TileInfo *tile, struct ModeDecisionContext *context_ptr,
+void               generate_av1_mvp_table(struct ModeDecisionContext *context_ptr,
                                           BlkStruct *blk_ptr, const BlockGeom *blk_geom, uint16_t blk_origin_x,
                                           uint16_t blk_origin_y, MvReferenceFrame *ref_frames, uint32_t tot_refs,
                                           PictureControlSet *pcs_ptr);
@@ -39,16 +39,8 @@ void               generate_av1_mvp_table(TileInfo *tile, struct ModeDecisionCon
 void get_av1_mv_pred_drl(struct ModeDecisionContext *context_ptr, BlkStruct *blk_ptr,
                          MvReferenceFrame ref_frame, uint8_t is_compound, PredictionMode mode,
                          uint8_t drl_index, IntMv nearestmv[2], IntMv nearmv[2], IntMv ref_mv[2]);
-
-void enc_pass_av1_mv_pred(TileInfo *tile, struct ModeDecisionContext *md_context_ptr,
-                          BlkStruct *blk_ptr, const BlockGeom *blk_geom, uint16_t blk_origin_x,
-                          uint16_t blk_origin_y, PictureControlSet *pcs_ptr,
-                          MvReferenceFrame ref_frame, uint8_t is_compound, PredictionMode mode,
-                          IntMv ref_mv[2]);
-
-void update_mi_map(struct ModeDecisionContext *context_ptr, BlkStruct *blk_ptr,
-                   uint32_t blk_origin_x, uint32_t blk_origin_y, const BlockGeom *blk_geom,
-                   uint8_t avail_blk_flag, PictureControlSet *pcs_ptr);
+void update_mi_map(BlkStruct* blk_ptr, uint32_t blk_origin_x, uint32_t blk_origin_y,
+                   const BlockGeom* blk_geom, uint8_t avail_blk_flag, PictureControlSet* pcs_ptr);
 
 uint16_t wm_find_samples(BlkStruct *blk_ptr, const BlockGeom *blk_geom, uint16_t blk_origin_x,
                          uint16_t blk_origin_y, MvReferenceFrame rf0, PictureControlSet *pcs_ptr,

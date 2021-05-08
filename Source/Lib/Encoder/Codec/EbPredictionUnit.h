@@ -31,7 +31,6 @@ typedef struct PredictionUnit {
     uint32_t intra_chroma_mode;
 
     // Inter Mode
-    PredictionMode inter_mode;
     EbBool         is_compound;
     uint8_t        ref_frame_type;
     MotionMode     motion_mode;

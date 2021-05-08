@@ -21,6 +21,14 @@
 #include "EbUtility.h"
 #include "EbLog.h"
 #include <math.h>
+
+/* assert a certain condition and report err if condition not met */
+void assert_err(uint32_t condition, char * err_msg) {
+    assert(condition);
+    if (!condition)
+        SVT_ERROR("\n %s \n", err_msg);
+}
+
 /********************************************************************************************
 * faster memcopy for <= 64B blocks, great w/ inlining and size known at compile time (or w/ PGO)
 * THIS NEEDS TO STAY IN A HEADER FOR BEST PERFORMANCE
@@ -222,32 +230,6 @@ const CodedBlockStats* get_coded_blk_stats(const uint32_t cu_idx) {
   *  Leading Zeros (NLZ) algorithm to get
   *  the log2f of a 64-bit number
   *****************************************/
-static inline uint64_t log2f_64(uint64_t x) {
-    int64_t n = 64, c = 32;
-
-    do {
-        uint64_t y = x >> c;
-        if (y > 0) {
-            n -= c;
-            x = y;
-        }
-        c >>= 1;
-    } while (c > 0);
-
-    return 64 - n;
-}
-
-uint64_t log2f_high_precision(uint64_t x, uint8_t precision) {
-    uint64_t sig_bit_location = log2f_64(x);
-    uint64_t remainder        = x - ((uint64_t)1 << (uint8_t)sig_bit_location);
-    uint64_t result;
-
-    result = (sig_bit_location << precision) +
-        ((remainder << precision) / ((uint64_t)1 << (uint8_t)sig_bit_location));
-
-    return result;
-}
-
 uint32_t log2f_32(uint32_t x) {
     //return (x > 1) ? 1 + log2(x >> 1) : 0;
     uint32_t log = (uint32_t)log2(x);

@@ -131,9 +131,6 @@ class EncParamTestBase : public ::testing::Test {
             ctxt_.enc_params.rate_control_mode = 1;
         } else if (!param_name_str_.compare("injector_frame_rate")) {
             ctxt_.enc_params.speed_control_flag = 1;
-        } else if (!param_name_str_.compare("altref_strength") ||
-                   !param_name_str_.compare("altref_nframes")) {
-            ctxt_.enc_params.tf_level = 1;
         }
     }
 
@@ -310,10 +307,6 @@ PARAM_TEST(EncParamEnableHmeTest);
 DEFINE_PARAM_TEST_CLASS(EncParamExtBlockTest, ext_block_flag);
 PARAM_TEST(EncParamExtBlockTest);
 
-/** Test case for in_loop_me_flag*/
-DEFINE_PARAM_TEST_CLASS(EncParamInLoopMeTest, in_loop_me_flag);
-PARAM_TEST(EncParamInLoopMeTest);
-
 /** Test case for search_area_width*/
 DEFINE_PARAM_TEST_CLASS(EncParamSearchAreaWidthTest, search_area_width);
 PARAM_TEST(EncParamSearchAreaWidthTest);
@@ -333,10 +326,6 @@ PARAM_TEST(EncParamRateCtrlModeTest);
 /** Test case for scene_change_detection*/
 DEFINE_PARAM_TEST_CLASS(EncParamSceneChangeDectTest, scene_change_detection);
 PARAM_TEST(EncParamSceneChangeDectTest);
-
-/** Test case for look_ahead_distance*/
-DEFINE_PARAM_TEST_CLASS(EncParamLookAheadDistanceTest, look_ahead_distance);
-PARAM_TEST(EncParamLookAheadDistanceTest);
 
 /** Test case for target_bit_rate*/
 DEFINE_PARAM_TEST_CLASS(EncParamTargetBitRateTest, target_bit_rate);
@@ -417,16 +406,24 @@ PARAM_TEST(EncParamScreenContentModeTest);
 DEFINE_PARAM_TEST_CLASS(EncParamEnableAltRefsTest, tf_level);
 PARAM_TEST(EncParamEnableAltRefsTest);
 
-/** Test case for altref_strength*/
-DEFINE_PARAM_TEST_CLASS(EncParamAltRefsStrengthTest, altref_strength);
-PARAM_TEST(EncParamAltRefsStrengthTest);
-
-/** Test case for altref_nframes*/
-DEFINE_PARAM_TEST_CLASS(EncParamAltRefsFramesNumTest, altref_nframes);
-PARAM_TEST(EncParamAltRefsFramesNumTest);
-
 /** Test case for enable_overlays*/
 DEFINE_PARAM_TEST_CLASS(EncParamEnableOverlaysTest, enable_overlays);
 PARAM_TEST(EncParamEnableOverlaysTest);
+
+/** Test case for color_range*/
+DEFINE_PARAM_TEST_CLASS(EncParamColorRangeTest, color_range);
+PARAM_TEST(EncParamColorRangeTest);
+
+/** Test case for color_primaries*/
+DEFINE_PARAM_TEST_CLASS(EncParamColorPrimariesTest, color_primaries);
+PARAM_TEST(EncParamColorPrimariesTest);
+
+/** Test case for transfer_characteristics*/
+DEFINE_PARAM_TEST_CLASS(EncParamTransferCharacteristicsTest, transfer_characteristics);
+PARAM_TEST(EncParamTransferCharacteristicsTest);
+
+/** Test case for matrix_coefficients*/
+DEFINE_PARAM_TEST_CLASS(EncParamMatrixCoefficientsTest, matrix_coefficients);
+PARAM_TEST(EncParamMatrixCoefficientsTest);
 
 }  // namespace

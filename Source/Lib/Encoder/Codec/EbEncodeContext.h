@@ -25,7 +25,6 @@
 #include "EbCabacContextModel.h"
 #include "EbMdRateEstimation.h"
 #include "EbPredictionStructure.h"
-#include "EbRateControlTables.h"
 #include "EbObject.h"
 #include "encoder.h"
 #include "firstpass.h"
@@ -41,7 +40,8 @@
 #define PICTURE_MANAGER_REORDER_QUEUE_MAX_DEPTH 2048
 #define HIGH_LEVEL_RATE_CONTROL_HISTOGRAM_QUEUE_MAX_DEPTH 2048
 #define PACKETIZATION_REORDER_QUEUE_MAX_DEPTH 2048
-
+#define TPL_PADX 20
+#define TPL_PADY 20
 // RC Groups: They should be a power of 2, so we can replace % by &.
 // Instead of using x % y, we use x && (y-1)
 #define PARALLEL_GOP_MAX_NUMBER 256
@@ -95,7 +95,7 @@ typedef struct EncodeContext {
     PictureDecisionReorderEntry **picture_decision_reorder_queue;
     uint32_t                      picture_decision_reorder_queue_head_index;
     //hold undisplayed frame for show existing frame. It's ordered with pts Descend.
-    EbObjectWrapper *picture_decision_undisplayed_queue[REF_FRAMES];
+    EbObjectWrapper *picture_decision_undisplayed_queue[UNDISP_QUEUE_SIZE];
     uint32_t         picture_decision_undisplayed_queue_count;
     // Picture Manager Pre-Assignment Buffer
     uint32_t          pre_assignment_buffer_intra_count;
@@ -128,11 +128,6 @@ typedef struct EncodeContext {
     PicQueueEntry **
         dep_cnt_picture_queue; //buffer to sotre all pictures needing dependent-count clean-up in PicMgr
 
-    // High Level Rate Control Histogram Queue
-    HlRateControlHistogramEntry **hl_rate_control_historgram_queue;
-    uint32_t                      hl_rate_control_historgram_queue_head_index;
-    EbHandle                      hl_rate_control_historgram_queue_mutex;
-
     // Packetization Reorder Queue
     PacketizationReorderEntry **packetization_reorder_queue;
     uint32_t                    packetization_reorder_queue_head_index;
@@ -154,10 +149,6 @@ typedef struct EncodeContext {
 
     // Prediction Structure
     PredictionStructureGroup *prediction_structure_group_ptr;
-    // Rate Control Bit Tables
-    RateControlTables *rate_control_tables_array;
-    EbBool             rate_control_tables_array_updated;
-    EbHandle           rate_table_update_mutex;
 
     // Speed Control
     int64_t   sc_buffer;

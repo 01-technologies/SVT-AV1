@@ -25,6 +25,7 @@ typedef struct MotionEstimationResults {
     EbDctor          dctor;
     EbObjectWrapper *pcs_wrapper_ptr;
     uint32_t         segment_index;
+    uint8_t          task_type;
 } MotionEstimationResults;
 
 typedef struct MotionEstimationResultsInitData {
@@ -36,8 +37,6 @@ typedef struct MotionEstimationResultsInitData {
      **************************************/
 extern EbErrorType motion_estimation_results_creator(EbPtr *object_dbl_ptr,
                                                      EbPtr  object_init_data_ptr);
-extern EbErrorType ime_results_creator(EbPtr *object_dbl_ptr, EbPtr object_init_data_ptr);
-
 #ifdef __cplusplus
 }
 #endif

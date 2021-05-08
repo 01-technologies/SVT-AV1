@@ -134,6 +134,152 @@ EbErrorType resource_coordination_context_ctor(EbThreadContext *thread_contxt_pt
     return EB_ErrorNone;
 }
 
+/*************************************************************************************
+tpl level control
+When the flag tpl_opt_flag is active, it implies that the TPL optimization actions
+listed in the tpl_control funtion could be considered
+In addition, only intra DC prediction could be considered and cost would be based
+only on distortion.
+When tpl_opt_flag is set to 0, none of the actions mentioned above could be considered
+0:OFF; 1:ON.
+***************************************************************************************/
+void set_tpl_extended_controls(
+    PictureParentControlSet *pcs_ptr, uint8_t tpl_level) {
+    TplControls *tpl_ctrls = &pcs_ptr->tpl_ctrls;
+    SequenceControlSet* scs_ptr = (SequenceControlSet*)pcs_ptr->scs_wrapper_ptr->object_ptr;
+    switch (tpl_level) {
+    case 0:
+        tpl_ctrls->tpl_opt_flag = 0;
+        tpl_ctrls->enable_tpl_qps = 0;
+        tpl_ctrls->disable_intra_pred_nbase = 0;
+        tpl_ctrls->disable_intra_pred_nref = 0;
+        tpl_ctrls->reduced_tpl_group = 0;
+        tpl_ctrls->pf_shape = DEFAULT_SHAPE;
+        tpl_ctrls->use_pred_sad_in_intra_search = 0;
+        tpl_ctrls->get_best_ref = 0;
+        tpl_ctrls->use_pred_sad_in_inter_search = 0;
+        tpl_ctrls->skip_rdoq_uv_qp_based_th = 4;
+        tpl_ctrls->r0_adjust_factor = 0.1;
+        break;
+    case 1:
+        tpl_ctrls->tpl_opt_flag = 1;
+        tpl_ctrls->enable_tpl_qps = 0;
+        tpl_ctrls->disable_intra_pred_nbase = 0;
+        tpl_ctrls->disable_intra_pred_nref = 0;
+        tpl_ctrls->reduced_tpl_group = 0;
+        tpl_ctrls->pf_shape = DEFAULT_SHAPE;
+        tpl_ctrls->use_pred_sad_in_intra_search = 0;
+        tpl_ctrls->get_best_ref = 0;
+        tpl_ctrls->use_pred_sad_in_inter_search = 0;
+        tpl_ctrls->skip_rdoq_uv_qp_based_th = 4;
+        tpl_ctrls->r0_adjust_factor = 0.1;
+        break;
+    case 2:
+        tpl_ctrls->tpl_opt_flag = 1;
+        tpl_ctrls->enable_tpl_qps = 0;
+        tpl_ctrls->disable_intra_pred_nbase = 0;
+        tpl_ctrls->disable_intra_pred_nref = 1;
+        tpl_ctrls->reduced_tpl_group = 2;
+        tpl_ctrls->pf_shape = DEFAULT_SHAPE;
+        tpl_ctrls->use_pred_sad_in_intra_search = 0;
+        tpl_ctrls->get_best_ref = 0;
+        tpl_ctrls->use_pred_sad_in_inter_search = 0;
+        tpl_ctrls->skip_rdoq_uv_qp_based_th = 4;
+        tpl_ctrls->r0_adjust_factor = 0.30;
+        break;
+    case 3:
+    default:
+        tpl_ctrls->tpl_opt_flag = 1;
+        tpl_ctrls->enable_tpl_qps = 0;
+        tpl_ctrls->disable_intra_pred_nbase = 0;
+        tpl_ctrls->disable_intra_pred_nref = 1;
+        tpl_ctrls->reduced_tpl_group = 2;
+        tpl_ctrls->get_best_ref = 0;
+        tpl_ctrls->pf_shape = scs_ptr->input_resolution <= INPUT_SIZE_480p_RANGE ? N2_SHAPE : N4_SHAPE;
+        tpl_ctrls->use_pred_sad_in_intra_search = 1;
+        tpl_ctrls->use_pred_sad_in_inter_search = 1;
+        tpl_ctrls->skip_rdoq_uv_qp_based_th = 4;
+        tpl_ctrls->r0_adjust_factor = 0.30;
+    }
+
+    if(scs_ptr->static_config.hierarchical_levels < 4)
+        tpl_ctrls->r0_adjust_factor = 0.1;
+}
+void set_tpl_controls(
+    PictureParentControlSet *pcs_ptr, uint8_t tpl_level) {
+    TplControls *tpl_ctrls = &pcs_ptr->tpl_ctrls;
+    SequenceControlSet* scs_ptr = (SequenceControlSet*)pcs_ptr->scs_wrapper_ptr->object_ptr;
+    switch (tpl_level) {
+    case 0:
+        tpl_ctrls->tpl_opt_flag = 0;
+        tpl_ctrls->enable_tpl_qps = 0;
+        tpl_ctrls->disable_intra_pred_nbase = 0;
+        tpl_ctrls->disable_intra_pred_nref = 0;
+        tpl_ctrls->disable_tpl_nref = 0;
+        tpl_ctrls->disable_tpl_pic_dist = 0;
+        tpl_ctrls->pf_shape = DEFAULT_SHAPE;
+        tpl_ctrls->use_pred_sad_in_intra_search = 0;
+        tpl_ctrls->get_best_ref = 0;
+        tpl_ctrls->use_pred_sad_in_inter_search = 0;
+        tpl_ctrls->skip_rdoq_uv_qp_based_th = 4;
+        tpl_ctrls->r0_adjust_factor = 0.0;
+        break;
+    case 1:
+        tpl_ctrls->tpl_opt_flag = 1;
+        tpl_ctrls->enable_tpl_qps = 0;
+        tpl_ctrls->disable_intra_pred_nbase = 0;
+        tpl_ctrls->disable_intra_pred_nref = 0;
+        tpl_ctrls->disable_tpl_nref = 0;
+        tpl_ctrls->disable_tpl_pic_dist = 0;
+        tpl_ctrls->pf_shape = DEFAULT_SHAPE;
+        tpl_ctrls->use_pred_sad_in_intra_search = 0;
+        tpl_ctrls->get_best_ref = 0;
+        tpl_ctrls->use_pred_sad_in_inter_search = 0;
+        tpl_ctrls->skip_rdoq_uv_qp_based_th = 4;
+        tpl_ctrls->r0_adjust_factor = 0.0;
+        break;
+    case 2:
+        tpl_ctrls->tpl_opt_flag = 1;
+        tpl_ctrls->enable_tpl_qps = 0;
+        tpl_ctrls->disable_intra_pred_nbase = 0;
+        tpl_ctrls->disable_intra_pred_nref = 1;
+        tpl_ctrls->disable_tpl_nref = 1;
+        tpl_ctrls->disable_tpl_pic_dist = 1;
+        tpl_ctrls->pf_shape = DEFAULT_SHAPE;
+        tpl_ctrls->use_pred_sad_in_intra_search = 0;
+        tpl_ctrls->get_best_ref = 0;
+        tpl_ctrls->use_pred_sad_in_inter_search = 0;
+        tpl_ctrls->skip_rdoq_uv_qp_based_th = 4;
+        tpl_ctrls->r0_adjust_factor = 0.0;
+        break;
+    case 3:
+    default:
+        tpl_ctrls->tpl_opt_flag = 1;
+        tpl_ctrls->enable_tpl_qps = 0;
+        tpl_ctrls->disable_intra_pred_nbase = 0;
+        tpl_ctrls->disable_intra_pred_nref = 1;
+        tpl_ctrls->disable_tpl_nref = 1;
+        tpl_ctrls->disable_tpl_pic_dist = 1;
+        tpl_ctrls->get_best_ref = 0;
+        tpl_ctrls->pf_shape = scs_ptr->input_resolution <= INPUT_SIZE_480p_RANGE ? N2_SHAPE : N4_SHAPE;
+        tpl_ctrls->use_pred_sad_in_intra_search = 1;
+        tpl_ctrls->use_pred_sad_in_inter_search = 1;
+        tpl_ctrls->skip_rdoq_uv_qp_based_th = 4;
+        tpl_ctrls->r0_adjust_factor = 0.0;
+        break;
+    }
+}
+/*
+* return the restoration level
+  Used by signal_derivation_pre_analysis_oq and memory allocation
+*/
+uint8_t get_enable_restoration(EbEncMode enc_mode) {
+
+    uint8_t enable_restoration;
+
+        enable_restoration = (enc_mode <= ENC_M6) ? 1 : 0;
+    return  enable_restoration;
+}
 /******************************************************
 * Derive Pre-Analysis settings for OQ for pcs
 Input   : encoder mode and tune
@@ -163,6 +309,19 @@ EbErrorType signal_derivation_pre_analysis_oq_pcs(SequenceControlSet const * con
     pcs_ptr->tf_enable_hme_level1_flag = 1;
     pcs_ptr->tf_enable_hme_level2_flag = 1;
 
+    uint8_t tpl_level;
+    if (pcs_ptr->enc_mode <= ENC_M4)
+        tpl_level = 0;
+    else if (pcs_ptr->enc_mode <= ENC_M7)
+        tpl_level = 2;
+    else
+        tpl_level = 3;
+
+    if (scs_ptr->lad_mg)
+        set_tpl_extended_controls(pcs_ptr,tpl_level);
+    else
+        set_tpl_controls(pcs_ptr, tpl_level);
+
     return return_error;
 }
 
@@ -186,7 +345,8 @@ EbErrorType signal_derivation_pre_analysis_oq_scs(SequenceControlSet * scs_ptr) 
         scs_ptr->seq_header.pic_based_rate_est = (uint8_t)scs_ptr->static_config.pic_based_rate_est;
 
     if (scs_ptr->static_config.enable_restoration_filtering == DEFAULT) {
-        scs_ptr->seq_header.enable_restoration = (scs_ptr->static_config.enc_mode <= ENC_M6) ? 1 : 0;
+        scs_ptr->seq_header.enable_restoration = get_enable_restoration(
+            scs_ptr->static_config.enc_mode);
     } else
         scs_ptr->seq_header.enable_restoration =
             (uint8_t)scs_ptr->static_config.enable_restoration_filtering;
@@ -199,8 +359,8 @@ EbErrorType signal_derivation_pre_analysis_oq_scs(SequenceControlSet * scs_ptr) 
     if (scs_ptr->static_config.enable_warped_motion == DEFAULT) {
         scs_ptr->seq_header.enable_warped_motion = 1;
     } else
-        scs_ptr->seq_header.enable_warped_motion =
-            (uint8_t)scs_ptr->static_config.enable_warped_motion;
+        scs_ptr->seq_header.enable_warped_motion = (uint8_t)
+            scs_ptr->static_config.enable_warped_motion;
 
     return return_error;
 }
@@ -482,7 +642,6 @@ static EbErrorType reset_pcs_av1(PictureParentControlSet *pcs_ptr) {
     frm_hdr->frame_refs_short_signaling = 0;
     pcs_ptr->allow_comp_inter_inter     = 0;
     //  int32_t all_one_sided_refs;
-    pcs_ptr->tpl_me_done                     = 0;
     pcs_ptr->me_data_wrapper_ptr             = NULL;
     pcs_ptr->down_scaled_picture_wrapper_ptr = NULL;
     pcs_ptr->ds_pics.picture_ptr             = NULL;
@@ -491,15 +650,20 @@ static EbErrorType reset_pcs_av1(PictureParentControlSet *pcs_ptr) {
     pcs_ptr->max_number_of_pus_per_sb        = SQUARE_PU_COUNT;
 
     atomic_set_u32(&pcs_ptr->pame_done, 0);
-#if FIX_DDL
+
     svt_create_cond_var(&pcs_ptr->me_ready);
 
-#else
-    EB_CREATE_SEMAPHORE(pcs_ptr->pame_done_semaphore, 0, 1);
-#endif
+   SequenceControlSet *scs_ptr = pcs_ptr->scs_ptr;
+   pcs_ptr->me_segments_completion_count = 0;
+   pcs_ptr->me_segments_column_count = (uint8_t)(scs_ptr->me_segment_column_count_array[0]);
+   pcs_ptr->me_segments_row_count = (uint8_t)(scs_ptr->me_segment_row_count_array[0]);
 
-    pcs_ptr->num_tpl_grps      = 0;
-    pcs_ptr->num_tpl_processed = 0;
+   pcs_ptr->me_segments_total_count =
+       (uint16_t)(pcs_ptr->me_segments_column_count * pcs_ptr->me_segments_row_count);
+   pcs_ptr->sb_total_count_pix = pcs_ptr->sb_total_count;
+   pcs_ptr->tpl_disp_coded_sb_count = 0;
+
+
 
     return EB_ErrorNone;
 }
@@ -715,6 +879,8 @@ static void setup_two_pass(SequenceControlSet *scs_ptr) {
             scs_ptr->twopass.stats_buf_ctx->stats_in_start =
                 encode_context_ptr->rc_twopass_stats_in.buf;
             scs_ptr->twopass.stats_in = scs_ptr->twopass.stats_buf_ctx->stats_in_start;
+            scs_ptr->twopass.stats_buf_ctx->stats_in_end_write =
+                &scs_ptr->twopass.stats_buf_ctx->stats_in_start[packets - 1];
             scs_ptr->twopass.stats_buf_ctx->stats_in_end =
                 &scs_ptr->twopass.stats_buf_ctx->stats_in_start[packets - 1];
             svt_av1_init_second_pass(scs_ptr);
@@ -869,7 +1035,6 @@ void *resource_coordination_kernel(void *input_ptr) {
 
             sb_params_init(scs_ptr);
             sb_geom_init(scs_ptr);
-            scs_ptr->tf_level = scs_ptr->static_config.tf_level ? 1 : 0;
 
             // initialize sequence level enable_superres
             scs_ptr->seq_header.enable_superres = 0;
@@ -891,9 +1056,8 @@ void *resource_coordination_kernel(void *input_ptr) {
             // 0                             | Disable
             // 1                             | Enable
             if (scs_ptr->static_config.filter_intra_level == DEFAULT)
-                scs_ptr->seq_header.filter_intra_level = (scs_ptr->static_config.enc_mode <= ENC_M5)
-                    ? 1
-                    : 0;
+                scs_ptr->seq_header.filter_intra_level =
+                (scs_ptr->static_config.enc_mode <= ENC_M5) ? 1 : 0;
             else
                 scs_ptr->seq_header.filter_intra_level =
                     (scs_ptr->static_config.filter_intra_level == 0) ? 0 : 1;
@@ -901,13 +1065,10 @@ void *resource_coordination_kernel(void *input_ptr) {
             // 0                 OFF: No compond mode search : AVG only
             // 1                 ON: full
             if (scs_ptr->static_config.compound_level == DEFAULT) {
-                scs_ptr->compound_mode = (scs_ptr->static_config.enc_mode <= ENC_M9) ? 1 : 0;
+                scs_ptr->compound_mode = 1;
             } else
                 scs_ptr->compound_mode = scs_ptr->static_config.compound_level;
 
-#if M8_NEW_REF
-            scs_ptr->compound_mode = 1;
-#endif
             if (scs_ptr->compound_mode) {
                 scs_ptr->seq_header.order_hint_info.enable_jnt_comp = 1; //DISTANCE
                 scs_ptr->seq_header.enable_masked_compound          = 1; //DIFF+WEDGE
@@ -915,6 +1076,12 @@ void *resource_coordination_kernel(void *input_ptr) {
                 scs_ptr->seq_header.order_hint_info.enable_jnt_comp = 0;
                 scs_ptr->seq_header.enable_masked_compound          = 0;
             }
+            // sf_identity
+            svt_av1_setup_scale_factors_for_frame(&scs_ptr->sf_identity,
+                scs_ptr->max_input_luma_width,
+                scs_ptr->max_input_luma_height,
+                scs_ptr->max_input_luma_width,
+                scs_ptr->max_input_luma_height);
         }
         // Since at this stage we do not know the prediction structure and the location of ALT_REF pictures,
         // for every picture (except first picture), we allocate two: 1. original picture, 2. potential Overlay picture.
@@ -988,7 +1155,7 @@ void *resource_coordination_kernel(void *input_ptr) {
             pcs_ptr->scs_ptr                   = scs_ptr;
             pcs_ptr->input_picture_wrapper_ptr = input_picture_wrapper_ptr;
             pcs_ptr->end_of_sequence_flag      = end_of_sequence_flag;
-
+            pcs_ptr->is_superres_none = (scs_ptr->static_config.superres_mode == SUPERRES_NONE);
             if (loop_index == 1) {
                 // Get a new input picture for overlay.
                 EbObjectWrapper *input_pic_wrapper_ptr;
@@ -1030,19 +1197,7 @@ void *resource_coordination_kernel(void *input_ptr) {
                 first_pass_signal_derivation_pre_analysis_pcs(pcs_ptr);
             else
                 signal_derivation_pre_analysis_oq_pcs(scs_ptr, pcs_ptr);
-            pcs_ptr->filtered_sse    = 0;
-            pcs_ptr->filtered_sse_uv = 0;
             // Rate Control
-            // Set the ME Distortion and OIS Historgrams to zero
-            if (scs_ptr->static_config.rate_control_mode) {
-                EB_MEMSET(pcs_ptr->me_distortion_histogram,
-                          0,
-                          NUMBER_OF_SAD_INTERVALS * sizeof(uint16_t));
-                EB_MEMSET(pcs_ptr->ois_distortion_histogram,
-                          0,
-                          NUMBER_OF_INTRA_SAD_INTERVALS * sizeof(uint16_t));
-            }
-            pcs_ptr->full_sb_count = 0;
 
             if (scs_ptr->static_config.use_qp_file == 1) {
                 pcs_ptr->qp_on_the_fly = EB_TRUE;
@@ -1081,12 +1236,6 @@ void *resource_coordination_kernel(void *input_ptr) {
                 svt_object_inc_live_count(pcs_ptr->pa_reference_picture_wrapper_ptr, 1);
             else
                 svt_object_inc_live_count(pcs_ptr->pa_reference_picture_wrapper_ptr, 2);
-            if (scs_ptr->in_loop_me) {
-                EbObjectWrapper *ds_wrapper;
-                svt_get_empty_object(scs_ptr->encode_context_ptr->down_scaled_picture_pool_fifo_ptr,
-                                     &ds_wrapper);
-                pcs_ptr->down_scaled_picture_wrapper_ptr = ds_wrapper;
-            }
             if (scs_ptr->static_config.unrestricted_motion_vector == 0) {
                 struct PictureParentControlSet *ppcs_ptr        = pcs_ptr;
                 Av1Common *const                cm              = ppcs_ptr->av1_cm;
@@ -1144,6 +1293,7 @@ void *resource_coordination_kernel(void *input_ptr) {
                     ppcs_out->alt_ref_ppcs_ptr->end_of_sequence_flag = EB_TRUE;
 
                 reset_pcs_av1(ppcs_out);
+
                 svt_get_empty_object(context_ptr->resource_coordination_results_output_fifo_ptr,
                                      &output_wrapper_ptr);
                 out_results_ptr = (ResourceCoordinationResults *)output_wrapper_ptr->object_ptr;

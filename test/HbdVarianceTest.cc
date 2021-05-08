@@ -279,6 +279,7 @@ class HbdVarianceTest : public ::testing::TestWithParam<HbdVarianceParam> {
                 << "Error at variance test index: " << i << " size: "<< width_ << "x" << height_;
             ASSERT_EQ(sse_tst, sse_ref) << "Error at sse test index: " << i
                 << " size: "<< width_ << "x" << height_;
+            ASSERT_EQ(sse_tst, sse_ref) << "Error at sse test index: " << i;
         }
     }
 
@@ -303,7 +304,6 @@ TEST_P(HbdVarianceTest, MaximumTest) {
 TEST_P(HbdVarianceTest, MatchTest) {
     run_match_test(10);
 };
-
 
 static const HbdVarianceParam HbdTestVector[] = {
     HbdVarianceParam(  8,  8, 8, svt_aom_highbd_8_variance8x8_sse2),

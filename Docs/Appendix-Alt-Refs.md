@@ -216,8 +216,6 @@ source picture is stored in an additional buffer.
 | **Flag**         | **Level (sequence/Picture)** | **Description**    |
 | ---------------- | ------------- | ------------ |
 | tf\_level        | Sequence                     | High-level flag to enable/disable temporally filtered pictures (default: enabled)                              |
-| altref\_nframes  | Picture                      | Number of frames to use for the temporally filtering (default: 7, {0, 10}) - Can be modified on a frame-basis  |
-| altref\_strength | Picture                      | Filtering strength to use for the temporally filtering (default: 5, {0, 6}) - Can be modified on a frame-basis |
 | enable\_overlays | Sequence                     | Enable overlay frames (default: on)      |
 
 
@@ -333,6 +331,10 @@ frame header OBU:
 
 In contrast, the temporally filtered key-frame will have ```showable_frame```
 = 1 and no Overlay picture.
+
+## Notes
+
+The feature settings that are described in this document were compiled at v0.8.3 of the code and may not reflect the current status of the code. The description in this document represents an example showing  how features would interact with the SVT architecture. For the most up-to-date settings, it's recommended to review the section of the code implementing this feature.
 
 ## References
 

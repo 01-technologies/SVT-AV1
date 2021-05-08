@@ -22,8 +22,7 @@
 void apply_segmentation_based_quantization(const BlockGeom *blk_geom, PictureControlSet *pcs_ptr,
                                            SuperBlock *sb_ptr, BlkStruct *blk_ptr);
 
-void setup_segmentation(PictureControlSet *pcs_ptr, SequenceControlSet *scs_ptr,
-                        RateControlLayerContext *rateControlLayerPtr);
+void setup_segmentation(PictureControlSet *pcs_ptr, SequenceControlSet *scs_ptr);
 
 void find_segment_qps(SegmentationParams *segmentation_params, PictureControlSet *pcs_ptr);
 

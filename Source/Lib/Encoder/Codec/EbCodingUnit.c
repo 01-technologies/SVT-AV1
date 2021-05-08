@@ -14,14 +14,16 @@
 
 #include "EbTransformUnit.h"
 #include "EbPictureControlSet.h"
+#include "EbUtility.h"
 
 void largest_coding_unit_dctor(EbPtr p) {
     SuperBlock *obj = (SuperBlock *)p;
-    EB_DELETE(obj->quantized_coeff);
     EB_FREE_ARRAY(obj->av1xd);
     EB_FREE_ARRAY(obj->final_blk_arr);
     EB_FREE_ARRAY(obj->cu_partition_array);
 }
+    uint8_t get_disallow_nsq(EbEncMode enc_mode);
+    uint8_t get_disallow_4x4(EbEncMode enc_mode, EB_SLICE slice_type);
 /*
 Tasks & Questions
     -Need a GetEmptyChain function for testing sub partitions.  Tie it to an Itr?
@@ -33,10 +35,10 @@ Tasks & Questions
 */
 EbErrorType largest_coding_unit_ctor(SuperBlock *larget_coding_unit_ptr, uint8_t sb_size_pix,
                                      uint16_t sb_origin_x, uint16_t sb_origin_y, uint16_t sb_index,
+                                     uint8_t enc_mode,
                                      PictureControlSet *picture_control_set)
 
 {
-    EbPictureBufferDescInitData coeff_init_data;
 
     larget_coding_unit_ptr->dctor = largest_coding_unit_dctor;
 
@@ -50,7 +52,26 @@ EbErrorType largest_coding_unit_ctor(SuperBlock *larget_coding_unit_ptr, uint8_t
     larget_coding_unit_ptr->origin_y = sb_origin_y;
 
     larget_coding_unit_ptr->index = sb_index;
-    uint32_t tot_blk_num          = sb_size_pix == 128 ? 1024 : 256;
+    uint8_t disallow_nsq =  get_disallow_nsq( enc_mode);
+    uint8_t disallow_4x4 = 1;
+    for (EB_SLICE slice_type = 0; slice_type < IDR_SLICE + 1 ; slice_type++)
+        disallow_4x4 =  MIN(disallow_4x4 ,get_disallow_4x4 (enc_mode,slice_type));
+
+    uint32_t tot_blk_num ;
+    if (sb_size_pix == 128)
+        if (disallow_4x4 && disallow_nsq)
+            tot_blk_num = 260;
+        else if (disallow_4x4)
+            tot_blk_num = 512;
+        else
+            tot_blk_num = 1024;
+    else
+        if (disallow_4x4 && disallow_nsq)
+            tot_blk_num = 65;
+        else if (disallow_4x4)
+            tot_blk_num = 128;
+        else
+            tot_blk_num = 256;
     EB_MALLOC_ARRAY(larget_coding_unit_ptr->final_blk_arr, tot_blk_num);
     EB_MALLOC_ARRAY(larget_coding_unit_ptr->av1xd, 1);
     // Do NOT initialize the final_blk_arr here
@@ -59,21 +80,6 @@ EbErrorType largest_coding_unit_ctor(SuperBlock *larget_coding_unit_ptr, uint8_t
     uint32_t max_block_count = sb_size_pix == 128 ? BLOCK_MAX_COUNT_SB_128 : BLOCK_MAX_COUNT_SB_64;
 
     EB_MALLOC_ARRAY(larget_coding_unit_ptr->cu_partition_array, max_block_count);
-
-    coeff_init_data.buffer_enable_mask = PICTURE_BUFFER_DESC_FULL_MASK;
-    coeff_init_data.max_width          = sb_size_pix;
-    coeff_init_data.max_height         = sb_size_pix;
-    coeff_init_data.bit_depth          = EB_32BIT;
-    coeff_init_data.color_format       = picture_control_set->color_format;
-    coeff_init_data.left_padding       = 0;
-    coeff_init_data.right_padding      = 0;
-    coeff_init_data.top_padding        = 0;
-    coeff_init_data.bot_padding        = 0;
-    coeff_init_data.split_mode         = EB_FALSE;
-
-    EB_NEW(larget_coding_unit_ptr->quantized_coeff,
-           svt_picture_buffer_desc_ctor,
-           (EbPtr)&coeff_init_data);
 
     return EB_ErrorNone;
 }

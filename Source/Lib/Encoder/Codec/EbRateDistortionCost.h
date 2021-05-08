@@ -26,18 +26,19 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-extern uint64_t svt_av1_cost_coeffs_txb(uint8_t allow_update_cdf, FRAME_CONTEXT *ec_ctx,
+extern uint64_t svt_av1_cost_coeffs_txb(
+                                       struct ModeDecisionContext *ctx,
+                                        uint8_t allow_update_cdf, FRAME_CONTEXT *ec_ctx,
                                         struct ModeDecisionCandidateBuffer *candidate_buffer_ptr,
                                         const TranLow *const qcoeff, uint16_t eob,
                                         PlaneType plane_type, TxSize transform_size,
                                         TxType transform_type, int16_t txb_skip_ctx,
                                         int16_t dc_sign_ctx, EbBool reduced_transform_set_flag);
 
-extern void coding_loop_context_generation(
+extern void coding_loop_context_generation(PictureControlSet *pcs_ptr,
     ModeDecisionContext *context_ptr, BlkStruct *blk_ptr, uint32_t blk_origin_x,
-    uint32_t blk_origin_y, uint32_t sb_sz, NeighborArrayUnit *inter_pred_dir_neighbor_array,
-    NeighborArrayUnit *ref_frame_type_neighbor_array,
-    NeighborArrayUnit *intra_luma_mode_neighbor_array, NeighborArrayUnit *skip_flag_neighbor_array,
+    uint32_t blk_origin_y,
+    NeighborArrayUnit *skip_flag_neighbor_array,
     NeighborArrayUnit *mode_type_neighbor_array, NeighborArrayUnit *leaf_partition_neighbor_array);
 
 extern EbErrorType av1_txb_calc_cost(
@@ -72,18 +73,10 @@ extern EbErrorType txb_calc_cost(
     uint64_t *y_txb_coeff_bits, uint64_t *cb_txb_coeff_bits, uint64_t *cr_txb_coeff_bits,
     uint32_t qp, uint64_t lambda, uint64_t lambda_chroma);
 extern EbErrorType av1_txb_calc_cost_luma(
-    int16_t                txb_skip_ctx,
-    ModeDecisionCandidate *candidate_ptr, // input parameter, prediction result Ptr
-    uint32_t               txb_index, // input parameter, TU index inside the CU
-    TxSize                 tx_size,
-    uint32_t
-        y_count_non_zero_coeffs, // input parameter, number of non zero Y quantized coefficients
-    uint64_t y_txb_distortion
-        [DIST_CALC_TOTAL], // input parameter, Y distortion for both Normal and Cbf zero modes
-    uint64_t *y_txb_coeff_bits, // input parameter, Y quantized coefficients rate
+    uint64_t y_txb_distortion[DIST_CALC_TOTAL], // input parameter, Y distortion for both Normal and Cbf zero modes
+    uint64_t *y_txb_coeff_bits,                 // input parameter, Y quantized coefficients rate
     uint64_t *y_full_cost,
-    uint64_t  lambda); // input parameter, lambda for Luma
-
+    uint64_t lambda);                           // input parameter, lambda for Luma
 extern EbErrorType intra_luma_mode_context(BlkStruct *blk_ptr, uint32_t luma_mode,
                                            int32_t *prediction_index);
 extern EbErrorType intra2_nx2_n_fast_cost_islice(
@@ -112,26 +105,24 @@ extern EbErrorType av1_split_flag_rate(PictureParentControlSet *pcs_ptr,
                                        uint64_t *split_rate, uint64_t lambda,
                                        MdRateEstimationContext *md_rate_estimation_ptr,
                                        uint32_t                 tb_max_depth);
-
-extern EbErrorType av1_encode_txb_calc_cost(EncDecContext *context_ptr,
-                                            uint32_t *     count_non_zero_coeffs,
-                                            uint64_t       y_txb_distortion[DIST_CALC_TOTAL],
-                                            uint64_t *y_txb_coeff_bits, uint32_t component_mask);
-
-extern uint64_t av1_intra_fast_cost(BlkStruct *blk_ptr, ModeDecisionCandidate *candidate_ptr,
+extern uint64_t av1_intra_fast_cost(
+                                   struct ModeDecisionContext *context_ptr,
+                                    BlkStruct *blk_ptr, ModeDecisionCandidate *candidate_ptr,
                                     uint32_t qp, uint64_t luma_distortion,
                                     uint64_t chroma_distortion, uint64_t lambda,
                                     PictureControlSet *pcs_ptr, CandidateMv *ref_mv_stack,
                                     const BlockGeom *blk_geom, uint32_t miRow, uint32_t miCol,
-                                    uint8_t enable_inter_intra, uint8_t md_pass,
+                                    uint8_t enable_inter_intra,
                                     uint32_t left_neighbor_mode, uint32_t top_neighbor_mode);
 
-extern uint64_t av1_inter_fast_cost(BlkStruct *blk_ptr, ModeDecisionCandidate *candidate_ptr,
+extern uint64_t av1_inter_fast_cost(
+                                   struct ModeDecisionContext *context_ptr,
+                                    BlkStruct *blk_ptr, ModeDecisionCandidate *candidate_ptr,
                                     uint32_t qp, uint64_t luma_distortion,
                                     uint64_t chroma_distortion, uint64_t lambda,
                                     PictureControlSet *pcs_ptr, CandidateMv *ref_mv_stack,
                                     const BlockGeom *blk_geom, uint32_t miRow, uint32_t miCol,
-                                    uint8_t enable_inter_intra, uint8_t md_pass,
+                                    uint8_t enable_inter_intra,
                                     uint32_t left_neighbor_mode, uint32_t top_neighbor_mode);
 
 extern EbErrorType av1_intra_full_cost(PictureControlSet *pcs_ptr, ModeDecisionContext *context_ptr,

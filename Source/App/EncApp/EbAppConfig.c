@@ -61,13 +61,13 @@
 #define BASE_LAYER_SWITCH_MODE_TOKEN "-base-layer-switch-mode" // no Eval
 #define QP_TOKEN "-q"
 #define USE_QP_FILE_TOKEN "-use-q-file"
-#if FTR_ENABLE_FIXED_QINDEX_OFFSETS
+
 #define USE_FIXED_QINDEX_OFFSETS_TOKEN "-use-fixed-qindex-offsets"
 #define QINDEX_OFFSETS_TOKEN "-qindex-offsets"
 #define KEY_FRAME_QINDEX_OFFSET_TOKEN "-key-frame-qindex-offset"
 #define KEY_FRAME_CHROMA_QINDEX_OFFSET_TOKEN "-key-frame-chroma-qindex-offset"
 #define CHROMA_QINDEX_OFFSETS_TOKEN "-chroma-qindex-offsets"
-#endif
+
 #define STAT_REPORT_TOKEN "-stat-report"
 #define FRAME_RATE_TOKEN "-fps"
 #define FRAME_RATE_NUMERATOR_TOKEN "-fps-num"
@@ -124,8 +124,6 @@
 #define INTRABC_MODE_TOKEN "-intrabc-mode"
 // --- start: ALTREF_FILTERING_SUPPORT
 #define TF_LEVEL "-tf-level"
-#define ALTREF_STRENGTH "-altref-strength"
-#define ALTREF_NFRAMES "-altref-nframes"
 #define ENABLE_OVERLAYS "-enable-overlays"
 // --- end: ALTREF_FILTERING_SUPPORT
 // --- start: SUPER-RESOLUTION SUPPORT
@@ -162,7 +160,6 @@
 #define SCENE_CHANGE_DETECTION_TOKEN "-scd"
 #define INJECTOR_TOKEN "-inj" // no Eval
 #define INJECTOR_FRAMERATE_TOKEN "-inj-frm-rt" // no Eval
-#define SPEED_CONTROL_TOKEN "-speed-ctrl"
 #define ASM_TYPE_TOKEN "-asm"
 #define THREAD_MGMNT "-lp"
 #define UNPIN_TOKEN "-unpin"
@@ -228,6 +225,11 @@
 #define PAETH_NEW_TOKEN "--enable-paeth"
 #define SMOOTH_NEW_TOKEN "--enable-smooth"
 #define MRP_LEVEL_TOKEN "--mrp-level"
+
+#define COLOR_PRIMARIES_NEW_TOKEN "--color-primaries"
+#define TRANSFER_CHARACTERISTICS_NEW_TOKEN "--transfer-characteristics"
+#define MATRIX_COEFFICIENTS_NEW_TOKEN "--matrix-coefficients"
+#define COLOR_RANGE_NEW_TOKEN "--color-range"
 
 #ifdef _WIN32
 static HANDLE get_file_handle(FILE *fp) { return (HANDLE)_get_osfhandle(_fileno(fp)); }
@@ -387,8 +389,16 @@ static void set_progress(const char *value, EbConfig *cfg) {
 }
 static void set_frame_rate(const char *value, EbConfig *cfg) {
     cfg->config.frame_rate = strtoul(value, NULL, 0);
-    if (cfg->config.frame_rate <= 1000)
+    if (cfg->config.frame_rate <= 1000) {
+        cfg->config.frame_rate_numerator = cfg->config.frame_rate * 1000;
+        cfg->config.frame_rate_denominator = 1000;
         cfg->config.frame_rate <<= 16;
+    }
+    else {
+        cfg->config.frame_rate_numerator = (cfg->config.frame_rate >> 16) * 1000;
+        cfg->config.frame_rate_denominator = 1000;
+    }
+
 }
 
 static void set_frame_rate_numerator(const char *value, EbConfig *cfg) {
@@ -418,6 +428,9 @@ static void set_cfg_intra_period(const char *value, EbConfig *cfg) {
 static void set_cfg_intra_refresh_type(const char *value, EbConfig *cfg) {
     cfg->config.intra_refresh_type = strtol(value, NULL, 0);
 };
+static void set_look_ahead_distance(const char *value, EbConfig *cfg) {
+    cfg->config.look_ahead_distance = strtol(value, NULL, 0);
+};
 static void set_hierarchical_levels(const char *value, EbConfig *cfg) {
     cfg->config.hierarchical_levels = strtol(value, NULL, 0);
 };
@@ -435,7 +448,7 @@ static void set_cfg_crf(const char *value, EbConfig *cfg) {
 static void set_cfg_use_qp_file(const char *value, EbConfig *cfg) {
     cfg->config.use_qp_file = (EbBool)strtol(value, NULL, 0);
 };
-#if FTR_ENABLE_FIXED_QINDEX_OFFSETS
+
 static void set_cfg_use_fixed_qindex_offsets(const char *value, EbConfig *cfg) {
     cfg->config.use_fixed_qindex_offsets = (EbBool)strtol(value, NULL, 0);
 }
@@ -492,7 +505,7 @@ static void set_cfg_chroma_qindex_offsets(const char *value, EbConfig *cfg) {
     }
     arg_parse_list(value, cfg->config.chroma_qindex_offsets, cfg->config.hierarchical_levels + 1);
 }
-#endif
+
 static void set_cfg_film_grain(const char *value, EbConfig *cfg) {
     cfg->config.film_grain_denoise_strength = strtol(value, NULL, 0);
 }; //not bool to enable possible algorithm extension in the future
@@ -598,9 +611,6 @@ static void set_tile_col(const char *value, EbConfig *cfg) {
 static void set_scene_change_detection(const char *value, EbConfig *cfg) {
     cfg->config.scene_change_detection = strtoul(value, NULL, 0);
 }
-static void set_look_ahead_distance(const char *value, EbConfig *cfg) {
-    cfg->config.look_ahead_distance = strtoul(value, NULL, 0);
-};
 static void set_enable_tpl_la(const char *value, EbConfig *cfg) {
     cfg->config.enable_tpl_la = (uint8_t)strtoul(value, NULL, 0);
 };
@@ -668,12 +678,7 @@ static void set_intrabc_mode(const char *value, EbConfig *cfg) {
 static void set_tf_level(const char *value, EbConfig *cfg) {
     cfg->config.tf_level = (int8_t)strtoul(value, NULL, 0);
 };
-static void set_altref_strength(const char *value, EbConfig *cfg) {
-    cfg->config.altref_strength = (uint8_t)strtoul(value, NULL, 0);
-};
-static void set_altref_n_frames(const char *value, EbConfig *cfg) {
-    cfg->config.altref_nframes = (uint8_t)strtoul(value, NULL, 0);
-};
+
 static void set_enable_overlays(const char *value, EbConfig *cfg) {
     cfg->config.enable_overlays = (EbBool)strtoul(value, NULL, 0);
 };
@@ -716,9 +721,7 @@ static void set_level(const char *value, EbConfig *cfg) {
 static void set_injector(const char *value, EbConfig *cfg) {
     cfg->injector = strtol(value, NULL, 0);
 };
-static void speed_control_flag(const char *value, EbConfig *cfg) {
-    cfg->speed_control_flag = strtol(value, NULL, 0);
-};
+
 static void set_injector_frame_rate(const char *value, EbConfig *cfg) {
     cfg->injector_frame_rate = strtoul(value, NULL, 0);
     if (cfg->injector_frame_rate <= 1000)
@@ -778,6 +781,18 @@ static void set_target_socket(const char *value, EbConfig *cfg) {
 static void set_unrestricted_motion_vector(const char *value, EbConfig *cfg) {
     cfg->config.unrestricted_motion_vector = (EbBool)strtol(value, NULL, 0);
 };
+static void set_cfg_color_primaries(const char *value, EbConfig *cfg) {
+    cfg->config.color_primaries = (uint8_t)strtoul(value, NULL, 0);
+}
+static void set_cfg_transfer_characteristics(const char *value, EbConfig *cfg) {
+    cfg->config.transfer_characteristics = (uint8_t)strtoul(value, NULL, 0);
+}
+static void set_cfg_matrix_coefficients(const char *value, EbConfig *cfg) {
+    cfg->config.matrix_coefficients = (uint8_t)strtoul(value, NULL, 0);
+}
+static void set_cfg_color_range(const char *value, EbConfig *cfg) {
+    cfg->config.color_range = (uint8_t)strtoul(value, NULL, 0);
+}
 
 enum CfgType {
     SINGLE_INPUT, // Configuration parameters that have only 1 value input
@@ -811,6 +826,11 @@ ConfigEntry config_entry_options[] = {
     {SINGLE_INPUT, OUTPUT_RECON_LONG_TOKEN, "Recon filename", set_cfg_recon_file},
 
     {SINGLE_INPUT, STAT_FILE_TOKEN, "Stat filename", set_cfg_stat_file},
+    {SINGLE_INPUT,
+     PRESET_TOKEN,
+     "Encoder mode/Preset used (-2 (debugging preset),-1 (debugging preset),0 - 8 [default]) the"
+     "higher the preset, the higher the speed, the lower the preset, the lower the quality",
+     set_enc_mode},
     {SINGLE_INPUT, NULL, NULL, NULL}};
 
 ConfigEntry config_entry_global_options[] = {
@@ -843,7 +863,7 @@ ConfigEntry config_entry_global_options[] = {
      set_no_progress},
     {SINGLE_INPUT,
      ENCODER_COLOR_FORMAT,
-     "Set encoder color format(EB_YUV400, EB_YUV420, EB_YUV422, EB_YUV444)",
+     "Set encoder color format(YUV400, YUV420, YUV422, YUV444 : YUV420 [default])",
      set_encoder_color_format},
     {SINGLE_INPUT,
      PROFILE_TOKEN,
@@ -865,33 +885,43 @@ ConfigEntry config_entry_global_options[] = {
      ENCODER_16BIT_PIPELINE,
      "Bit depth for enc-dec(0: lbd[default], 1: hbd)",
      set_encoder_16bit_pipeline},
+    {SINGLE_INPUT,
+     INPUT_COMPRESSED_TEN_BIT_FORMAT,
+     " Offline packing of the 2bits: requires two bits packed input (0: OFF[default], 1: ON)",
+     set_compressed_ten_bit_format},
+    // Latency
+    {SINGLE_INPUT,
+     INJECTOR_TOKEN,
+     "Inject pictures at defined frame rate(0: OFF[default],1: ON)",
+     set_injector},
+    {SINGLE_INPUT, INJECTOR_FRAMERATE_TOKEN, "Set injector frame rate", set_injector_frame_rate},
     //{SINGLE_INPUT, LEVEL_TOKEN, "Level", set_level},
     {SINGLE_INPUT,
      HIERARCHICAL_LEVELS_TOKEN,
-     "Set hierarchical levels(3 or 4[default])",
+     "Set hierarchical levels (0 - 5 : 4 [default])",
      set_hierarchical_levels},
     {SINGLE_INPUT,
      PRED_STRUCT_TOKEN,
      "Set prediction structure( 0: low delay P, 1: low delay B, 2: random access [default])",
      set_cfg_pred_structure},
-    //{SINGLE_INPUT,
-    // HDR_INPUT_TOKEN,
-    // "Enable high dynamic range(0: OFF[default], ON: 1)",
-    // set_high_dynamic_range_input},
     {SINGLE_INPUT,
-     HDR_INPUT_NEW_TOKEN,
-     "Enable high dynamic range(0: OFF[default], ON: 1)",
-     set_high_dynamic_range_input},
+     STAT_REPORT_NEW_TOKEN,
+     "outputs psnr ssim metrics at the end of the encode    (0: OFF[default], 1: ON)",
+     set_stat_report},
+
     // Asm Type
     {SINGLE_INPUT,
      ASM_TYPE_TOKEN,
      "Limit assembly instruction set [0 - 11] or [c, mmx, sse, sse2, sse3, ssse3, sse4_1, sse4_2,"
      " avx, avx2, avx512, max], by default highest level supported by CPU",
      set_asm_type},
-    {SINGLE_INPUT, THREAD_MGMNT, "number of logical processors to be used", set_logical_processors},
+    {SINGLE_INPUT,
+     THREAD_MGMNT,
+     " target number of logical cores to be used (1-max number of cores on machine[default])",
+     set_logical_processors},
     {SINGLE_INPUT,
      UNPIN_TOKEN,
-     "Allows the execution to be pined/unpined to/from a specific number of cores \n"
+     "Allows the execution to be pined/unpined to/from specific cores set by --lp \n"
      "The combinational use of --unpin with --lp results in memory reduction while allowing the "
      "execution to work on any of the cores and not restrict it to specific cores \n"
      "--unpin is overwritten to 0 when --ss is set to 0 or 1. ( 0: OFF ,1: ON [default]) \n"
@@ -912,14 +942,14 @@ ConfigEntry config_entry_rc[] = {
     // Rate Control
     {SINGLE_INPUT,
      RATE_CONTROL_ENABLE_TOKEN,
-     "Rate control mode(0 = CQP if --enable-tpl-la is set to 0, else CRF , 1 = VBR , 2 = CVBR)",
+     "Rate control mode(0 = CQP if --enable-tpl-la is set to 0, else CRF , 1 = VBR)",
      set_rate_control_mode},
     {SINGLE_INPUT, TARGET_BIT_RATE_TOKEN, "Target Bitrate (kbps)", set_target_bit_rate},
     {SINGLE_INPUT,
      USE_QP_FILE_TOKEN,
      "Overwrite QP assignment using qp values in QP file",
      set_cfg_use_qp_file},
-#if FTR_ENABLE_FIXED_QINDEX_OFFSETS
+
     {SINGLE_INPUT, USE_FIXED_QINDEX_OFFSETS_TOKEN,
      "Use fixed QIndex offset",
      set_cfg_use_fixed_qindex_offsets},
@@ -935,16 +965,23 @@ ConfigEntry config_entry_rc[] = {
      {SINGLE_INPUT, CHROMA_QINDEX_OFFSETS_TOKEN,
      "ChromaQIndexOffsets",
      set_cfg_chroma_qindex_offsets},
-#endif
-    //{SINGLE_INPUT, QP_FILE_TOKEN, "Path to Qp file", set_cfg_qp_file},
+
     {SINGLE_INPUT, QP_FILE_NEW_TOKEN, "Path to Qp file", set_cfg_qp_file},
-    {SINGLE_INPUT, MAX_QP_TOKEN, "Maximum (worst) quantizer[0-63]", set_max_qp_allowed},
-    {SINGLE_INPUT, MIN_QP_TOKEN, "Minimum (best) quantizer[0-63]", set_min_qp_allowed},
-    //{SINGLE_INPUT,
-    // ADAPTIVE_QP_ENABLE_TOKEN,
-    // "Set adaptive QP level(0: OFF ,1: variance base using segments ,2: Deltaq pred efficiency)",
-    // set_adaptive_quantization},
+    {SINGLE_INPUT, QP_TOKEN, "Constant/Constrained Quality level", set_cfg_qp},
+    {SINGLE_INPUT, QP_LONG_TOKEN, "Constant/Constrained Quality level", set_cfg_qp},
     {SINGLE_INPUT,
+     CRF_LONG_TOKEN,
+     "Constant Rate Factor, equal to --rc 0 --enable-tpl-la 1 --qp x",
+     set_cfg_crf},
+    {SINGLE_INPUT,
+    MAX_QP_TOKEN,
+     "Maximum (worst) quantizer[0-63] only applicable  when --rc > 0",
+     set_max_qp_allowed},
+     {SINGLE_INPUT,
+    MIN_QP_TOKEN,
+     "Minimum (best) quantizer[0-63] only applicable when --rc > 0",
+     set_min_qp_allowed},
+     {SINGLE_INPUT,
      ADAPTIVE_QP_ENABLE_TOKEN,
      "Set adaptive QP level(0: OFF ,1: variance base using segments ,2: Deltaq pred efficiency)",
      set_adaptive_quantization},
@@ -954,7 +991,10 @@ ConfigEntry config_entry_rc[] = {
      "Datarate undershoot (min) target (%)",
      set_under_shoot_pct},
     {SINGLE_INPUT, OVER_SHOOT_PCT_TOKEN, "Datarate overshoot (max) target (%)", set_over_shoot_pct},
-    {SINGLE_INPUT, RECODE_LOOP_TOKEN, "Recode loop levels ", set_recode_loop},
+    {SINGLE_INPUT,
+     RECODE_LOOP_TOKEN,
+     "Recode loop levels    (0 : OFF, 1: Allow recode for KF and exceeding maximum frame bandwidth, 2:Allow recode only for KF/ARF/GF frames, 3: Allow recode for all frames based on bitrate constraints, 4: preset based decision [Default])",
+     set_recode_loop},
     // Termination
     {SINGLE_INPUT, NULL, NULL, NULL}};
 ConfigEntry config_entry_2p[] = {
@@ -970,9 +1010,12 @@ ConfigEntry config_entry_2p[] = {
      set_two_pass_stats},
     {SINGLE_INPUT,
      PASSES_TOKEN,
-     "Number of passes (1: one pass encode, 2: two passes encode)",
+     "Number of passes (1: one pass encode, 2: two passes encode) applicable only for rc > 0",
      set_passes},
-    {SINGLE_INPUT, VBR_BIAS_PCT_TOKEN, "CBR/VBR bias (0=CBR, 100=VBR)", set_vbr_bias_pct},
+    {SINGLE_INPUT,
+     VBR_BIAS_PCT_TOKEN,
+     "CBR/VBR bias (0=CBR-like, 100=VBR-like)",
+     set_vbr_bias_pct},
     {SINGLE_INPUT,
      VBR_MIN_SECTION_PCT_TOKEN,
      "GOP min bitrate (% of target)",
@@ -991,28 +1034,25 @@ ConfigEntry config_entry_intra_refresh[] = {
      set_cfg_intra_period},
     {SINGLE_INPUT,
      INTRA_REFRESH_TYPE_TOKEN,
-     "Intra refresh type (1: CRA (Open GOP), 2: IDR (Closed GOP)[default])",
-     set_tile_row},
+     "Intra refresh type (1: FWD Frame (Open GOP), 2: KEY Frame (Closed GOP)[default])",
+    set_cfg_intra_refresh_type },
+    { SINGLE_INPUT,
+    LOOKAHEAD_NEW_TOKEN,
+    "The lookahead option is currently disabled (forced to 0) until further work is done on "
+    "rate control",
+    set_look_ahead_distance },
+    { SINGLE_INPUT,
+    LOOK_AHEAD_DIST_TOKEN,
+    "The lookahead option is currently disabled (forced to 0) until further work is done on "
+    "rate control",
+    set_look_ahead_distance },
+
     // Termination
     {SINGLE_INPUT, NULL, NULL, NULL}};
 ConfigEntry config_entry_specific[] = {
-    // Prediction Structure
-    //{SINGLE_INPUT, ENCMODE_TOKEN, "Encoder mode/Preset used[0-8]", set_enc_mode},
-    {SINGLE_INPUT, PRESET_TOKEN, "Encoder mode/Preset used[-2,-1,0,..,8]", set_enc_mode},
-    {SINGLE_INPUT,
-     INPUT_COMPRESSED_TEN_BIT_FORMAT,
-     "Offline packing of the 2bits: requires two bits packed input (0: OFF[default], 1: ON)",
-     set_compressed_ten_bit_format},
     {SINGLE_INPUT, TILE_ROW_TOKEN, "Number of tile rows to use, log2[0-6]", set_tile_row},
     {SINGLE_INPUT, TILE_COL_TOKEN, "Number of tile columns to use, log2[0-4]", set_tile_col},
-    {SINGLE_INPUT, QP_TOKEN, "Constant/Constrained Quality level", set_cfg_qp},
-    {SINGLE_INPUT, QP_LONG_TOKEN, "Constant/Constrained Quality level", set_cfg_qp},
-    {SINGLE_INPUT, CRF_LONG_TOKEN, "Constant Rate Factor, equal to --rc 0 --enable-tpl-la 1 --qp x", set_cfg_crf},
 
-    {SINGLE_INPUT,
-     LOOKAHEAD_NEW_TOKEN,
-     "When RC is ON , it is best to set this parameter to be equal to the intra period value",
-     set_look_ahead_distance},
     // DLF
     {SINGLE_INPUT,
      LOOP_FILTER_DISABLE_NEW_TOKEN,
@@ -1041,7 +1081,6 @@ ConfigEntry config_entry_specific[] = {
      MRP_LEVEL_TOKEN,
      "Multi reference frame levels( 0: OFF, 1: FULL, 2: Level1 .. 9: Level8,  -1: DEFAULT)",
      set_mrp_level},
-    {SINGLE_INPUT, LOOK_AHEAD_DIST_TOKEN, "Set look ahead distance", set_look_ahead_distance},
     {SINGLE_INPUT,
      ENABLE_TPL_LA_TOKEN,
      "RDO based on frame temporal dependency (0: off, 1: backward source based)",
@@ -1191,7 +1230,7 @@ ConfigEntry config_entry_specific[] = {
     // MD Parameters
     {SINGLE_INPUT,
      SCREEN_CONTENT_TOKEN,
-     "Set screen content detection level([0-2], 0: DEFAULT)",
+     "Set screen content detection level([0-2], 2 Content adaptive decision: DEFAULT)",
      set_screen_content_mode},
     {SINGLE_INPUT,
      INTRABC_MODE_TOKEN,
@@ -1211,17 +1250,6 @@ ConfigEntry config_entry_specific[] = {
      "Allow motion vectors to reach outside of the picture boundary(O: OFF, 1: ON[default])",
      set_unrestricted_motion_vector},
 
-    //{ SINGLE_INPUT, BITRATE_REDUCTION_TOKEN, "bit_rate_reduction", SetBitRateReduction },
-    // Latency
-    {SINGLE_INPUT,
-     INJECTOR_TOKEN,
-     "Inject pictures at defined frame rate(0: OFF[default],1: ON)",
-     set_injector},
-    {SINGLE_INPUT, INJECTOR_FRAMERATE_TOKEN, "Set injector frame rate", set_injector_frame_rate},
-    {SINGLE_INPUT,
-     SPEED_CONTROL_TOKEN,
-     "Enable speed control(0: OFF[default], 1: ON)",
-     speed_control_flag},
     // Annex A parameters
     {SINGLE_INPUT,
      FILM_GRAIN_TOKEN,
@@ -1230,30 +1258,42 @@ ConfigEntry config_entry_specific[] = {
     // --- start: ALTREF_FILTERING_SUPPORT
     {SINGLE_INPUT,
      TF_LEVEL,
-     "Set altref level(-1: Default; 0: OFF; 1: ON; 2 and 3: Faster levels)",
+     "Set altref level(-1: Default; 0: OFF; 1: ON)",
      set_tf_level},
-    {SINGLE_INPUT,
-     ALTREF_STRENGTH,
-     "AltRef filter strength([0-6], default: 5)",
-     set_altref_strength},
-    {SINGLE_INPUT, ALTREF_NFRAMES, "AltRef max frames([0-10], default: 7)", set_altref_n_frames},
+
     {SINGLE_INPUT,
      ENABLE_OVERLAYS,
      "Enable the insertion of an extra picture called overlayer picture which will be used as an "
      "extra reference frame for the base-layer picture(0: OFF[default], 1: ON)",
      set_enable_overlays},
     // --- end: ALTREF_FILTERING_SUPPORT
-    {SINGLE_INPUT, STAT_REPORT_NEW_TOKEN, "Stat Report", set_stat_report},
+
     {SINGLE_INPUT,
      INTRA_ANGLE_DELTA_NEW_TOKEN,
      "Enable intra angle delta filtering filtering (0: OFF, 1: ON, -1: DEFAULT)",
      set_intra_angle_delta_flag},
 
-    // double dash
-    //{SINGLE_INPUT,
-    //NX4_4XN_MV_INJECT_NEW_TOKEN,
-    // "nx4ParentMvInjection",
-    // set_nx4_4xn_parent_mv_inject_flag},
+    // Termination
+    {SINGLE_INPUT, NULL, NULL, NULL}};
+
+ConfigEntry config_entry_color_description[] = {
+    // Color description
+    {SINGLE_INPUT,
+     COLOR_PRIMARIES_NEW_TOKEN,
+     "Color primaries (2: DEFAULT)",
+     set_cfg_color_primaries},
+    {SINGLE_INPUT,
+     TRANSFER_CHARACTERISTICS_NEW_TOKEN,
+     "Transfer characteristics (2: DEFAULT)",
+     set_cfg_transfer_characteristics},
+    {SINGLE_INPUT,
+     MATRIX_COEFFICIENTS_NEW_TOKEN,
+     "Matrix coefficients (2: DEFAULT)",
+     set_cfg_matrix_coefficients},
+    {SINGLE_INPUT,
+     COLOR_RANGE_NEW_TOKEN,
+     "Color range, 0: Studio (default), 1: Full",
+     set_cfg_color_range},
 
     // Termination
     {SINGLE_INPUT, NULL, NULL, NULL}};
@@ -1308,16 +1348,15 @@ ConfigEntry config_entry[] = {
     {SINGLE_INPUT, QP_TOKEN, "QP", set_cfg_qp},
     {SINGLE_INPUT, CRF_LONG_TOKEN, "CRF", set_cfg_crf},
     {SINGLE_INPUT, USE_QP_FILE_TOKEN, "UseQpFile", set_cfg_use_qp_file},
-#if FTR_ENABLE_FIXED_QINDEX_OFFSETS
+
     {SINGLE_INPUT, USE_FIXED_QINDEX_OFFSETS_TOKEN, "UseFixedQIndexOffsets", set_cfg_use_fixed_qindex_offsets},
     {SINGLE_INPUT, KEY_FRAME_QINDEX_OFFSET_TOKEN, "KeyFrameQIndexOffset", set_cfg_key_frame_qindex_offset},
     {SINGLE_INPUT, KEY_FRAME_CHROMA_QINDEX_OFFSET_TOKEN, "KeyFrameChromaQIndexOffset", set_cfg_key_frame_chroma_qindex_offset},
     {SINGLE_INPUT, QINDEX_OFFSETS_TOKEN, "QIndexOffsets", set_cfg_qindex_offsets},
     {SINGLE_INPUT, CHROMA_QINDEX_OFFSETS_TOKEN, "ChromaQIndexOffsets", set_cfg_chroma_qindex_offsets},
-#endif
+
     {SINGLE_INPUT, STAT_REPORT_TOKEN, "StatReport", set_stat_report},
     {SINGLE_INPUT, RATE_CONTROL_ENABLE_TOKEN, "RateControlMode", set_rate_control_mode},
-    {SINGLE_INPUT, LOOK_AHEAD_DIST_TOKEN, "LookAheadDistance", set_look_ahead_distance},
     {SINGLE_INPUT, ENABLE_TPL_LA_TOKEN, "EnableTplLA", set_enable_tpl_la},
     {SINGLE_INPUT, TARGET_BIT_RATE_TOKEN, "TargetBitRate", set_target_bit_rate},
     {SINGLE_INPUT, MAX_QP_TOKEN, "MaxQpAllowed", set_max_qp_allowed},
@@ -1436,7 +1475,6 @@ ConfigEntry config_entry[] = {
     // Latency
     {SINGLE_INPUT, INJECTOR_TOKEN, "Injector", set_injector},
     {SINGLE_INPUT, INJECTOR_FRAMERATE_TOKEN, "InjectorFrameRate", set_injector_frame_rate},
-    {SINGLE_INPUT, SPEED_CONTROL_TOKEN, "SpeedControlFlag", speed_control_flag},
     // Annex A parameters
     {SINGLE_INPUT, PROFILE_TOKEN, "Profile", set_profile},
     {SINGLE_INPUT, TIER_TOKEN, "Tier", set_tier},
@@ -1446,8 +1484,6 @@ ConfigEntry config_entry[] = {
     {SINGLE_INPUT, ASM_TYPE_TOKEN, "Asm", set_asm_type},
     // --- start: ALTREF_FILTERING_SUPPORT
     {SINGLE_INPUT, TF_LEVEL, "TfLevel", set_tf_level},
-    {SINGLE_INPUT, ALTREF_STRENGTH, "AltRefStrength", set_altref_strength},
-    {SINGLE_INPUT, ALTREF_NFRAMES, "AltRefNframes", set_altref_n_frames},
     {SINGLE_INPUT, ENABLE_OVERLAYS, "EnableOverlays", set_enable_overlays},
     // --- end: ALTREF_FILTERING_SUPPORT
     // Super-resolution support
@@ -1465,11 +1501,16 @@ ConfigEntry config_entry[] = {
      "Intra period interval(frames) (-2: default intra period, -1: No intra update or [0 - "
      "2^31-2]; [-2 - 255] if RateControlMode>=1)",
      set_cfg_intra_period},
-    {SINGLE_INPUT,
-     LOOKAHEAD_NEW_TOKEN,
-     "When RC is ON , it is best to set this parameter to be equal to the intra period value",
-     set_look_ahead_distance},
-
+    { SINGLE_INPUT,
+        LOOKAHEAD_NEW_TOKEN,
+        "The lookahead option is currently disabled (forced to 0) until further work is done on "
+        "rate control",
+        set_look_ahead_distance },
+    { SINGLE_INPUT,
+        LOOK_AHEAD_DIST_TOKEN,
+        "The lookahead option is currently disabled (forced to 0) until further work is done on "
+        "rate control",
+        set_look_ahead_distance },
     {SINGLE_INPUT, STAT_REPORT_NEW_TOKEN, "Stat Report", set_stat_report},
     {SINGLE_INPUT,
      RESTORATION_ENABLE_NEW_TOKEN,
@@ -1531,6 +1572,24 @@ ConfigEntry config_entry[] = {
     {SINGLE_INPUT, INTRA_ANGLE_DELTA_NEW_TOKEN, "Intra Angle Delta", set_intra_angle_delta_flag},
     {SINGLE_INPUT, PAETH_NEW_TOKEN, "Paeth New Token", set_enable_paeth_flag},
     {SINGLE_INPUT, SMOOTH_NEW_TOKEN, "Smooth New Token", set_enable_smooth_flag},
+
+    // Color description
+    {SINGLE_INPUT,
+     COLOR_PRIMARIES_NEW_TOKEN,
+     "ColorPrimaries",
+     set_cfg_color_primaries},
+    {SINGLE_INPUT,
+     TRANSFER_CHARACTERISTICS_NEW_TOKEN,
+     "TransferCharacteristics",
+     set_cfg_transfer_characteristics},
+    {SINGLE_INPUT,
+     MATRIX_COEFFICIENTS_NEW_TOKEN,
+     "MatrixCoefficients",
+     set_cfg_matrix_coefficients},
+    {SINGLE_INPUT,
+     COLOR_RANGE_NEW_TOKEN,
+     "ColorRange",
+     set_cfg_color_range},
 
     // Termination
     {SINGLE_INPUT, NULL, NULL, NULL}};
@@ -2059,7 +2118,7 @@ static EbErrorType verify_settings(EbConfig *config, uint32_t channel_number) {
         return EB_ErrorBadParameter;
     }
     if (pass != DEFAULT || config->input_stat_file || config->output_stat_file) {
-        if (config->config.hierarchical_levels > 4) {
+        if (config->config.hierarchical_levels < 2) {
             fprintf(
                 config->error_log_file,
                 "Error instance %u: 2 pass encode for hierarchical_levels %u is not supported\n",
@@ -2080,6 +2139,13 @@ static EbErrorType verify_settings(EbConfig *config, uint32_t channel_number) {
                     config->config.intra_refresh_type);
             return EB_ErrorBadParameter;
         }
+    }
+    if (pass != DEFAULT && config->config.rate_control_mode == 0) {
+        fprintf(
+            config->error_log_file,
+            "Error instance %u: 2 pass encode for CRF is not supported \n",
+            channel_number + 1);
+        return EB_ErrorBadParameter;
     }
     return return_error;
 }
@@ -2135,11 +2201,11 @@ uint32_t get_help(int32_t argc, char *const argv[]) {
     printf(
         "Usage: SvtAv1EncApp <options> -b dst_filename -i src_filename\n\n"
         "Examples:\n"
-        "Two passes encode:\n"
-        "    SvtAv1EncApp <--stats svtav1_2pass.log> --pass 1 -b dst_filename -i src_filename\n"
-        "    SvtAv1EncApp <--stats svtav1_2pass.log> --pass 2 -b dst_filename -i src_filename\n"
+        "Two passes encode (VBR only):\n"
+        "    SvtAv1EncApp <--stats svtav1_2pass.log> --rc 1 --tbr 1000 --pass 1 -b dst_filename -i src_filename\n"
+        "    SvtAv1EncApp <--stats svtav1_2pass.log> --rc 1 --tbr 1000 --pass 2 -b dst_filename -i src_filename\n"
         "Or a combined cli:\n"
-        "    SvtAv1EncApp <--stats svtav1_2pass.log> --passes 2 -b dst_filename -i src_filename\n"
+        "    SvtAv1EncApp <--stats svtav1_2pass.log> --passes 2 --rc 1 --tbr 1000 -b dst_filename -i src_filename\n"
         "\nOptions:\n");
     for (ConfigEntry *options_token_index = config_entry_options; options_token_index->token;
          ++options_token_index) {
@@ -2213,7 +2279,7 @@ uint32_t get_help(int32_t argc, char *const argv[]) {
                    two_p_token_index->name);
         }
     }
-    printf("\nKeyframe Placement Options:\n");
+    printf("\nGOP size and type Options:\n");
     for (ConfigEntry *kf_token_index = config_entry_intra_refresh; kf_token_index->token;
          ++kf_token_index) {
         switch (check_long(*kf_token_index, kf_token_index[1])) {
@@ -2247,6 +2313,24 @@ uint32_t get_help(int32_t argc, char *const argv[]) {
                                                    : "      -%-25s   %-25s\n",
                    sp_token_index->token,
                    sp_token_index->name);
+        }
+    }
+    printf("\nColor Description Options:\n");
+    for (ConfigEntry* cd_token_index = config_entry_color_description; cd_token_index->token;
+        ++cd_token_index) {
+        switch (check_long(*cd_token_index, cd_token_index[1])) {
+        case 1:
+            printf("  %s, %-25s    %-25s\n",
+                   cd_token_index->token,
+                   cd_token_index[1].token,
+                   cd_token_index->name);
+            ++cd_token_index;
+            break;
+        default:
+            printf(cd_token_index->token[1] == '-' ? "      %-25s    %-25s\n"
+                                                   : "      -%-25s   %-25s\n",
+                   cd_token_index->token,
+                   cd_token_index->name);
         }
     }
     return 1;
@@ -2310,17 +2394,13 @@ uint32_t get_passes(int32_t argc, char *const argv[], EncodePass pass[MAX_ENCODE
         return 1;
     }
 
-    int preset = MAX_ENC_PRESET;
-    if (find_token(argc, argv, PRESET_TOKEN, config_string) == 0 ||
-        find_token(argc, argv, ENCMODE_TOKEN, config_string) == 0) {
-        preset = strtol(config_string, NULL, 0);
-    }
     int rc_mode = 0;
     if (find_token(argc, argv, RATE_CONTROL_ENABLE_TOKEN, config_string) == 0 ||
         find_token(argc, argv, "--rc", config_string) == 0)
         rc_mode = strtol(config_string, NULL, 0);
 
-    if (preset > 3 && rc_mode == 0) {
+    if (rc_mode == 0)
+    {
         fprintf(
             stderr,
             "\nWarn: --passes 2 CRF for preset > 3 is not supported yet, force single pass\n\n");
@@ -2571,8 +2651,6 @@ const char *handle_warnings(const char *token, char *print_message, uint8_t doub
         linked_token = KEYINT_TOKEN;
     if (strcmp(token, QP_FILE_TOKEN) == 0)
         linked_token = QP_FILE_NEW_TOKEN;
-    if (strcmp(token, LOOK_AHEAD_DIST_TOKEN) == 0)
-        linked_token = LOOKAHEAD_NEW_TOKEN;
 
     if (strcmp(token, STAT_REPORT_TOKEN) == 0)
         linked_token = STAT_REPORT_NEW_TOKEN;
@@ -2600,8 +2678,6 @@ const char *handle_warnings(const char *token, char *print_message, uint8_t doub
         linked_token = GLOBAL_MOTION_ENABLE_NEW_TOKEN;
     if (strcmp(token, RDOQ_TOKEN) == 0)
         linked_token = RDOQ_NEW_TOKEN;
-    if (strcmp(token, FILTER_INTRA_TOKEN) == 0)
-        linked_token = FILTER_INTRA_NEW_TOKEN;
     if (strcmp(token, HDR_INPUT_TOKEN) == 0)
         linked_token = HDR_INPUT_NEW_TOKEN;
     if (strcmp(token, ADAPTIVE_QP_ENABLE_TOKEN) == 0)

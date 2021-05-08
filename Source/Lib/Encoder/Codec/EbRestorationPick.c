@@ -104,7 +104,7 @@ static void rsc_on_tile(int32_t tile_row, int32_t tile_col, void *priv) {
     set_default_sgrproj(&rsc->sgrproj);
     set_default_wiener(&rsc->wiener);
 
-    rsc->tile_stripe0 = (tile_row == 0) ? 0 : rsc->cm->rst_end_stripe[tile_row - 1];
+    rsc->tile_stripe0 = (tile_row == 0) ? 0 : rsc->cm->child_pcs->rst_end_stripe[tile_row - 1];
 }
 
 static void reset_rsc(RestSearchCtxt *rsc) {
@@ -141,7 +141,7 @@ static int64_t try_restoration_unit_seg(const RestSearchCtxt *       rsc,
     const Av1Common *const cm    = rsc->cm;
     const int32_t          plane = rsc->plane;
     const int32_t          is_uv = plane > 0;
-    const RestorationInfo *rsi   = &cm->rst_info[plane];
+    const RestorationInfo *rsi   = &cm->child_pcs->rst_info[plane];
     RestorationLineBuffers rlbs;
     const int32_t          bit_depth = cm->bit_depth;
     const int32_t          highbd    = cm->use_highbitdepth;
@@ -150,7 +150,11 @@ static int64_t try_restoration_unit_seg(const RestSearchCtxt *       rsc,
 
     const int32_t optimized_lr = 0;
 
-    svt_av1_loop_restoration_filter_unit(1,
+    // If boundaries are enabled for filtering, recon gets updated using setup/restore
+    // processing_stripe_bounadaries.  Many threads doing so will result in race condition.
+    // Only use boundaries during the filter search if a copy of recon is made for each
+    // thread (controlled with scs_ptr->seq_header.use_boundaries_in_rest_search).
+    svt_av1_loop_restoration_filter_unit(cm->use_boundaries_in_rest_search,
                                          limits,
                                          rui,
                                          &rsi->boundaries,
@@ -167,7 +171,6 @@ static int64_t try_restoration_unit_seg(const RestSearchCtxt *       rsc,
                                          rsc->dst->strides[is_uv],
                                          rsc->tmpbuf,
                                          optimized_lr);
-
     return sse_restoration_unit(limits, rsc->src, rsc->dst, plane, highbd);
 }
 
@@ -1267,7 +1270,7 @@ static void copy_unit_info(RestorationType frame_rtype, const RestUnitSearchInfo
 }
 
 static int32_t rest_tiles_in_plane(const Av1Common *cm, int32_t plane) {
-    const RestorationInfo *rsi = &cm->rst_info[plane];
+    const RestorationInfo *rsi = &cm->child_pcs->rst_info[plane];
     return rsi->units_per_tile;
 }
 
@@ -1526,7 +1529,7 @@ void restoration_seg_search(int32_t *rst_tmpbuf, Yv12BufferConfig *org_fts,
     const int32_t plane_start = AOM_PLANE_Y;
     const int32_t plane_end   = AOM_PLANE_V;
     for (int32_t plane = plane_start; plane <= plane_end; ++plane) {
-        RestUnitSearchInfo *rusi = pcs_ptr->parent_pcs_ptr->rusi_picture[plane];
+        RestUnitSearchInfo *rusi = pcs_ptr->rusi_picture[plane];
 
         init_rsc_seg(org_fts, src, cm, x, plane, rusi, trial_frame_rst, &rsc);
 
@@ -1568,7 +1571,11 @@ void restoration_seg_search(int32_t *rst_tmpbuf, Yv12BufferConfig *org_fts,
                                            segment_index);
     }
 }
-void rest_finish_search(PictureParentControlSet *p_pcs_ptr, Macroblock *x, Av1Common *const cm) {
+
+void rest_finish_search(PictureControlSet *pcs_ptr){
+    Macroblock *x = pcs_ptr->parent_pcs_ptr->av1x;
+    Av1Common *const cm = pcs_ptr->parent_pcs_ptr->av1_cm;
+    PictureParentControlSet *p_pcs_ptr = pcs_ptr->parent_pcs_ptr;
     RestorationType force_restore_type_d = (cm->wn_filter_mode) ? RESTORE_TYPES : RESTORE_SGRPROJ;
     int32_t         ntiles[2];
     for (int32_t is_uv = 0; is_uv < 2; ++is_uv) ntiles[is_uv] = rest_tiles_in_plane(cm, is_uv);
@@ -1594,7 +1601,7 @@ void rest_finish_search(PictureParentControlSet *p_pcs_ptr, Macroblock *x, Av1Co
         rsc.plane    = plane;
         rsc.rusi     = rusi;
         rsc.pic_num  = (uint32_t)p_pcs_ptr->picture_number;
-        rsc.rusi_pic = p_pcs_ptr->rusi_picture[plane];
+        rsc.rusi_pic = pcs_ptr->rusi_picture[plane];
 
         const int32_t         plane_ntiles = ntiles[plane > 0];
         const RestorationType num_rtypes   = (plane_ntiles > 1) ? RESTORE_TYPES
@@ -1617,14 +1624,13 @@ void rest_finish_search(PictureParentControlSet *p_pcs_ptr, Macroblock *x, Av1Co
                 best_rtype = r;
             }
         }
-
-        cm->rst_info[plane].frame_restoration_type = best_rtype;
+        cm->child_pcs->rst_info[plane].frame_restoration_type = best_rtype;
         if (force_restore_type_d != RESTORE_TYPES)
             assert(best_rtype == force_restore_type_d || best_rtype == RESTORE_NONE);
 
         if (best_rtype != RESTORE_NONE) {
             for (int32_t u = 0; u < plane_ntiles; ++u)
-                copy_unit_info(best_rtype, &rusi[u], &cm->rst_info[plane].unit_info[u]);
+                copy_unit_info(best_rtype, &rusi[u], &cm->child_pcs->rst_info[plane].unit_info[u]);
         }
     }
 

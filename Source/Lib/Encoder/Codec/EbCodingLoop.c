@@ -367,6 +367,12 @@ static void av1_encode_loop(PictureControlSet *pcs_ptr, EncDecContext *context_p
     //**********************************
     if (component_mask == PICTURE_BUFFER_DESC_FULL_MASK ||
         component_mask == PICTURE_BUFFER_DESC_LUMA_MASK) {
+        if (context_ptr->md_skip_blk) {
+            count_non_zero_coeffs[0] = 0;
+            eob[0] = 0;
+            context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[0][context_ptr->txb_itr] = 0;
+        }
+        else {
         svt_residual_kernel8bit(
             input_samples->buffer_y + input_luma_offset,
             input_samples->stride_y,
@@ -376,6 +382,7 @@ static void av1_encode_loop(PictureControlSet *pcs_ptr, EncDecContext *context_p
             residual16bit->stride_y,
             context_ptr->blk_geom->tx_width[blk_ptr->tx_depth][context_ptr->txb_itr],
             context_ptr->blk_geom->tx_height[blk_ptr->tx_depth][context_ptr->txb_itr]);
+
         av1_estimate_transform(
             ((int16_t *)residual16bit->buffer_y) + scratch_luma_offset,
             residual16bit->stride_y,
@@ -393,7 +400,7 @@ static void av1_encode_loop(PictureControlSet *pcs_ptr, EncDecContext *context_p
                                    .feature_data[context_ptr->blk_ptr->segment_id][SEG_LVL_ALT_Q]
                              : 0;
 
-        blk_ptr->quantized_dc[0][context_ptr->txb_itr] = av1_quantize_inv_quantize(
+        context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[0][context_ptr->txb_itr] = av1_quantize_inv_quantize(
             sb_ptr->pcs_ptr,
             context_ptr->md_context,
             ((TranLow *)transform16bit->buffer_y) + coeff1d_offset,
@@ -418,9 +425,6 @@ static void av1_encode_loop(PictureControlSet *pcs_ptr, EncDecContext *context_p
             context_ptr->md_context->full_lambda_md[EB_8_BIT_MD],
             EB_TRUE);
 
-        if (context_ptr->md_skip_blk) {
-            count_non_zero_coeffs[0] = 0;
-            eob[0]                   = 0;
         }
         context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].y_has_coeff[context_ptr->txb_itr] = count_non_zero_coeffs[0] ? EB_TRUE : EB_FALSE;
 
@@ -507,19 +511,74 @@ static void av1_encode_loop(PictureControlSet *pcs_ptr, EncDecContext *context_p
         }
 
         //**********************************
-        // Cb
+        // Chroma
         //**********************************
+        if (context_ptr->md_skip_blk) {
+            count_non_zero_coeffs[1] = 0;
+            eob[1] = 0;
+           context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[1][context_ptr->txb_itr] = 0;
+            count_non_zero_coeffs[2] = 0;
+            eob[2] = 0;
+           context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[2][context_ptr->txb_itr] = 0;
+        }
+        else {
 
-        svt_residual_kernel8bit(
-            input_samples->buffer_cb + input_cb_offset,
-            input_samples->stride_cb,
-            pred_samples->buffer_cb + pred_cb_offset,
-            pred_samples->stride_cb,
-            ((int16_t *)residual16bit->buffer_cb) + scratch_cb_offset,
-            residual16bit->stride_cb,
-            context_ptr->blk_geom->tx_width_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
-            context_ptr->blk_geom->tx_height_uv[blk_ptr->tx_depth][context_ptr->txb_itr]);
+            int32_t seg_qp = pcs_ptr->parent_pcs_ptr->frm_hdr.segmentation_params.segmentation_enabled
+                ? pcs_ptr->parent_pcs_ptr->frm_hdr.segmentation_params
+                .feature_data[context_ptr->blk_ptr->segment_id][SEG_LVL_ALT_Q]
+                : 0;
+            //**********************************
+            // Cb
+            //**********************************
+            svt_residual_kernel8bit(
+                input_samples->buffer_cb + input_cb_offset,
+                input_samples->stride_cb,
+                pred_samples->buffer_cb + pred_cb_offset,
+                pred_samples->stride_cb,
+                ((int16_t *)residual16bit->buffer_cb) + scratch_cb_offset,
+                residual16bit->stride_cb,
+                context_ptr->blk_geom->tx_width_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
+                context_ptr->blk_geom->tx_height_uv[blk_ptr->tx_depth][context_ptr->txb_itr]);
 
+            av1_estimate_transform(
+                ((int16_t *)residual16bit->buffer_cb) + scratch_cb_offset,
+                residual16bit->stride_cb,
+                ((TranLow *)transform16bit->buffer_cb) + context_ptr->coded_area_sb_uv,
+                NOT_USED_VALUE,
+                context_ptr->blk_geom->txsize_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
+                &context_ptr->three_quad_energy,
+                EB_8BIT,
+                txb_ptr->transform_type[PLANE_TYPE_UV],
+                PLANE_TYPE_UV,
+                context_ptr->md_context->pf_ctrls.pf_shape);
+        context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[1][context_ptr->txb_itr] = av1_quantize_inv_quantize(
+                sb_ptr->pcs_ptr,
+                context_ptr->md_context,
+                ((TranLow *)transform16bit->buffer_cb) + context_ptr->coded_area_sb_uv,
+                NOT_USED_VALUE,
+                ((int32_t *)coeff_samples_sb->buffer_cb) + context_ptr->coded_area_sb_uv,
+                ((int32_t *)inverse_quant_buffer->buffer_cb) + context_ptr->coded_area_sb_uv,
+                qindex,
+                seg_qp,
+                context_ptr->blk_geom->tx_width_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
+                context_ptr->blk_geom->tx_height_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
+                context_ptr->blk_geom->txsize_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
+                &eob[1],
+                &(count_non_zero_coeffs[1]),
+                COMPONENT_CHROMA_CB,
+                EB_8BIT,
+                txb_ptr->transform_type[PLANE_TYPE_UV],
+                &(context_ptr->md_context->candidate_buffer_ptr_array[0][0]),
+                context_ptr->md_context->cb_txb_skip_context,
+                context_ptr->md_context->cb_dc_sign_context,
+                blk_ptr->pred_mode,
+                blk_ptr->use_intrabc,
+                context_ptr->md_context->full_lambda_md[EB_8_BIT_MD],
+                EB_TRUE);
+
+        //**********************************
+        // Cr
+        //**********************************
         svt_residual_kernel8bit(
             input_samples->buffer_cr + input_cr_offset,
             input_samples->stride_cr,
@@ -529,59 +588,6 @@ static void av1_encode_loop(PictureControlSet *pcs_ptr, EncDecContext *context_p
             residual16bit->stride_cr,
             context_ptr->blk_geom->tx_width_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
             context_ptr->blk_geom->tx_height_uv[blk_ptr->tx_depth][context_ptr->txb_itr]);
-
-        av1_estimate_transform(
-            ((int16_t *)residual16bit->buffer_cb) + scratch_cb_offset,
-            residual16bit->stride_cb,
-            ((TranLow *)transform16bit->buffer_cb) + context_ptr->coded_area_sb_uv,
-            NOT_USED_VALUE,
-            context_ptr->blk_geom->txsize_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
-            &context_ptr->three_quad_energy,
-            EB_8BIT,
-            txb_ptr->transform_type[PLANE_TYPE_UV],
-            PLANE_TYPE_UV,
-            context_ptr->md_context->pf_ctrls.pf_shape);
-
-        int32_t seg_qp = pcs_ptr->parent_pcs_ptr->frm_hdr.segmentation_params.segmentation_enabled
-                             ? pcs_ptr->parent_pcs_ptr->frm_hdr.segmentation_params
-                                   .feature_data[context_ptr->blk_ptr->segment_id][SEG_LVL_ALT_Q]
-                             : 0;
-
-        blk_ptr->quantized_dc[1][context_ptr->txb_itr] = av1_quantize_inv_quantize(
-            sb_ptr->pcs_ptr,
-            context_ptr->md_context,
-            ((TranLow *)transform16bit->buffer_cb) + context_ptr->coded_area_sb_uv,
-            NOT_USED_VALUE,
-            ((int32_t *)coeff_samples_sb->buffer_cb) + context_ptr->coded_area_sb_uv,
-            ((int32_t *)inverse_quant_buffer->buffer_cb) + context_ptr->coded_area_sb_uv,
-            qindex,
-            seg_qp,
-            context_ptr->blk_geom->tx_width_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
-            context_ptr->blk_geom->tx_height_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
-            context_ptr->blk_geom->txsize_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
-            &eob[1],
-            &(count_non_zero_coeffs[1]),
-            COMPONENT_CHROMA_CB,
-            EB_8BIT,
-            txb_ptr->transform_type[PLANE_TYPE_UV],
-            &(context_ptr->md_context->candidate_buffer_ptr_array[0][0]),
-            context_ptr->md_context->cb_txb_skip_context,
-            context_ptr->md_context->cb_dc_sign_context,
-            blk_ptr->pred_mode,
-            blk_ptr->use_intrabc,
-            context_ptr->md_context->full_lambda_md[EB_8_BIT_MD],
-            EB_TRUE);
-
-        if (context_ptr->md_skip_blk) {
-            count_non_zero_coeffs[1] = 0;
-            eob[1]                   = 0;
-        }
-        context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].u_has_coeff[context_ptr->txb_itr] = count_non_zero_coeffs[1] ? EB_TRUE : EB_FALSE;
-
-        //**********************************
-        // Cr
-        //**********************************
-
         av1_estimate_transform(
             ((int16_t *)residual16bit->buffer_cr) + scratch_cb_offset,
             residual16bit->stride_cr,
@@ -593,7 +599,7 @@ static void av1_encode_loop(PictureControlSet *pcs_ptr, EncDecContext *context_p
             txb_ptr->transform_type[PLANE_TYPE_UV],
             PLANE_TYPE_UV,
             context_ptr->md_context->pf_ctrls.pf_shape);
-        blk_ptr->quantized_dc[2][context_ptr->txb_itr] = av1_quantize_inv_quantize(
+        context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[2][context_ptr->txb_itr] = av1_quantize_inv_quantize(
             sb_ptr->pcs_ptr,
             context_ptr->md_context,
             ((TranLow *)transform16bit->buffer_cr) + context_ptr->coded_area_sb_uv,
@@ -617,10 +623,9 @@ static void av1_encode_loop(PictureControlSet *pcs_ptr, EncDecContext *context_p
             blk_ptr->use_intrabc,
             context_ptr->md_context->full_lambda_md[EB_8_BIT_MD],
             EB_TRUE);
-        if (context_ptr->md_skip_blk) {
-            count_non_zero_coeffs[2] = 0;
-            eob[2]                   = 0;
         }
+
+        context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].u_has_coeff[context_ptr->txb_itr] = count_non_zero_coeffs[1] ? EB_TRUE : EB_FALSE;
         context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].v_has_coeff[context_ptr->txb_itr] = count_non_zero_coeffs[2] ? EB_TRUE : EB_FALSE;
 
         txb_ptr->nz_coef_count[1] = (uint16_t)count_non_zero_coeffs[1];
@@ -748,6 +753,12 @@ static void av1_encode_loop_16bit(PictureControlSet *pcs_ptr, EncDecContext *con
         //**********************************
         if (component_mask == PICTURE_BUFFER_DESC_FULL_MASK ||
             component_mask == PICTURE_BUFFER_DESC_LUMA_MASK) {
+            if (context_ptr->md_skip_blk) {
+                count_non_zero_coeffs[0] = 0;
+                eob[0] = 0;
+                context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[0][context_ptr->txb_itr] = 0;
+            }
+            else {
             svt_residual_kernel16bit(
                 ((uint16_t *)input_samples16bit->buffer_y) + input_luma_offset,
                 input_samples16bit->stride_y,
@@ -774,7 +785,7 @@ static void av1_encode_loop_16bit(PictureControlSet *pcs_ptr, EncDecContext *con
                     ? pcs_ptr->parent_pcs_ptr->frm_hdr.segmentation_params
                           .feature_data[context_ptr->blk_ptr->segment_id][SEG_LVL_ALT_Q]
                     : 0;
-            blk_ptr->quantized_dc[0][context_ptr->txb_itr] = av1_quantize_inv_quantize(
+            context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[0][context_ptr->txb_itr] = av1_quantize_inv_quantize(
                 sb_ptr->pcs_ptr,
                 context_ptr->md_context,
                 ((int32_t *)transform16bit->buffer_y) + coeff1d_offset,
@@ -798,9 +809,6 @@ static void av1_encode_loop_16bit(PictureControlSet *pcs_ptr, EncDecContext *con
                 blk_ptr->use_intrabc,
                 context_ptr->md_context->full_lambda_md[(bit_depth == EB_10BIT) ? EB_10_BIT_MD : EB_8_BIT_MD],
                 EB_TRUE);
-            if (context_ptr->md_skip_blk) {
-                count_non_zero_coeffs[0] = 0;
-                eob[0]                   = 0;
             }
             context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].y_has_coeff[context_ptr->txb_itr] = count_non_zero_coeffs[0] ? EB_TRUE : EB_FALSE;
 
@@ -888,6 +896,24 @@ static void av1_encode_loop_16bit(PictureControlSet *pcs_ptr, EncDecContext *con
         }
 
             //**********************************
+            // Chroma
+            //**********************************
+        if (context_ptr->md_skip_blk) {
+            count_non_zero_coeffs[1] = 0;
+            eob[1] = 0;
+           context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[1][context_ptr->txb_itr] = 0;
+
+            count_non_zero_coeffs[2] = 0;
+            eob[2] = 0;
+           context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[2][context_ptr->txb_itr] = 0;
+        }
+        else {
+            int32_t seg_qp =
+                pcs_ptr->parent_pcs_ptr->frm_hdr.segmentation_params.segmentation_enabled
+                ? pcs_ptr->parent_pcs_ptr->frm_hdr.segmentation_params
+                .feature_data[context_ptr->blk_ptr->segment_id][SEG_LVL_ALT_Q]
+                : 0;
+            //**********************************
             // Cb
             //**********************************
             svt_residual_kernel16bit(
@@ -899,17 +925,6 @@ static void av1_encode_loop_16bit(PictureControlSet *pcs_ptr, EncDecContext *con
                 residual16bit->stride_cb,
                 context_ptr->blk_geom->tx_width_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
                 context_ptr->blk_geom->tx_height_uv[blk_ptr->tx_depth][context_ptr->txb_itr]);
-
-            svt_residual_kernel16bit(
-                ((uint16_t *)input_samples16bit->buffer_cr) + input_cr_offset,
-                input_samples16bit->stride_cr,
-                ((uint16_t *)pred_samples16bit->buffer_cr) + pred_cr_offset,
-                pred_samples16bit->stride_cr,
-                ((int16_t *)residual16bit->buffer_cr) + scratch_cr_offset,
-                residual16bit->stride_cr,
-                context_ptr->blk_geom->tx_width_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
-                context_ptr->blk_geom->tx_height_uv[blk_ptr->tx_depth][context_ptr->txb_itr]);
-
             av1_estimate_transform(
                 ((int16_t *)residual16bit->buffer_cb) + scratch_cb_offset,
                 residual16bit->stride_cb,
@@ -921,13 +936,7 @@ static void av1_encode_loop_16bit(PictureControlSet *pcs_ptr, EncDecContext *con
                 txb_ptr->transform_type[PLANE_TYPE_UV],
                 PLANE_TYPE_UV,
                 context_ptr->md_context->pf_ctrls.pf_shape);
-            int32_t seg_qp =
-                pcs_ptr->parent_pcs_ptr->frm_hdr.segmentation_params.segmentation_enabled
-                    ? pcs_ptr->parent_pcs_ptr->frm_hdr.segmentation_params
-                          .feature_data[context_ptr->blk_ptr->segment_id][SEG_LVL_ALT_Q]
-                    : 0;
-
-            blk_ptr->quantized_dc[1][context_ptr->txb_itr] = av1_quantize_inv_quantize(
+            context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[1][context_ptr->txb_itr] = av1_quantize_inv_quantize(
                 sb_ptr->pcs_ptr,
                 context_ptr->md_context,
                 ((int32_t *)transform16bit->buffer_cb) + context_ptr->coded_area_sb_uv,
@@ -952,16 +961,18 @@ static void av1_encode_loop_16bit(PictureControlSet *pcs_ptr, EncDecContext *con
                 context_ptr->md_context->full_lambda_md[(bit_depth == EB_10BIT) ? EB_10_BIT_MD : EB_8_BIT_MD],
                 EB_TRUE);
 
-            if (context_ptr->md_skip_blk) {
-                count_non_zero_coeffs[1] = 0;
-                eob[1]                   = 0;
-            }
-            context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].u_has_coeff[context_ptr->txb_itr] = count_non_zero_coeffs[1] ? EB_TRUE : EB_FALSE;
-
             //**********************************
             // Cr
             //**********************************
-
+            svt_residual_kernel16bit(
+                ((uint16_t *)input_samples16bit->buffer_cr) + input_cr_offset,
+                input_samples16bit->stride_cr,
+                ((uint16_t *)pred_samples16bit->buffer_cr) + pred_cr_offset,
+                pred_samples16bit->stride_cr,
+                ((int16_t *)residual16bit->buffer_cr) + scratch_cr_offset,
+                residual16bit->stride_cr,
+                context_ptr->blk_geom->tx_width_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
+                context_ptr->blk_geom->tx_height_uv[blk_ptr->tx_depth][context_ptr->txb_itr]);
             av1_estimate_transform(
                 ((int16_t *)residual16bit->buffer_cr) + scratch_cb_offset,
                 residual16bit->stride_cr,
@@ -973,8 +984,7 @@ static void av1_encode_loop_16bit(PictureControlSet *pcs_ptr, EncDecContext *con
                 txb_ptr->transform_type[PLANE_TYPE_UV],
                 PLANE_TYPE_UV,
                 context_ptr->md_context->pf_ctrls.pf_shape);
-
-            blk_ptr->quantized_dc[2][context_ptr->txb_itr] = av1_quantize_inv_quantize(
+            context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[2][context_ptr->txb_itr] = av1_quantize_inv_quantize(
                 sb_ptr->pcs_ptr,
                 context_ptr->md_context,
                 ((int32_t *)transform16bit->buffer_cr) + context_ptr->coded_area_sb_uv,
@@ -998,10 +1008,8 @@ static void av1_encode_loop_16bit(PictureControlSet *pcs_ptr, EncDecContext *con
                 blk_ptr->use_intrabc,
                 context_ptr->md_context->full_lambda_md[(bit_depth == EB_10BIT) ? EB_10_BIT_MD : EB_8_BIT_MD],
                 EB_TRUE);
-            if (context_ptr->md_skip_blk) {
-                count_non_zero_coeffs[2] = 0;
-                eob[2]                   = 0;
             }
+            context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].u_has_coeff[context_ptr->txb_itr] = count_non_zero_coeffs[1] ? EB_TRUE : EB_FALSE;
             context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].v_has_coeff[context_ptr->txb_itr] = count_non_zero_coeffs[2] ? EB_TRUE : EB_FALSE;
 
             txb_ptr->nz_coef_count[1] = (uint16_t)count_non_zero_coeffs[1];
@@ -1296,9 +1304,7 @@ void store16bit_input_src(EbPictureBufferDesc *input_sample16bit_buffer, Picture
                sb_w * 2);
 }
 
-void update_av1_mi_map(BlkStruct *blk_ptr, uint32_t blk_origin_x, uint32_t blk_origin_y,
-                       const BlockGeom *blk_geom, PictureControlSet *pcs_ptr);
-
+void update_mi_map_skip_settings(BlkStruct *blk_ptr);
 void move_blk_data(PictureControlSet *pcs, EncDecContext *context_ptr, BlkStruct *src_cu,
                    BlkStruct *dst_cu);
 
@@ -1309,8 +1315,7 @@ void perform_intra_coding_loop(PictureControlSet *pcs_ptr, SuperBlock *sb_ptr, u
     uint32_t bit_depth = context_ptr->bit_depth;
     uint8_t is_inter = 0; // set to 0 b/c this is the intra path
     EbPictureBufferDesc *recon_buffer;
-    EbPictureBufferDesc *coeff_buffer_sb = sb_ptr->quantized_coeff;
-
+    EbPictureBufferDesc *coeff_buffer_sb = pcs_ptr->parent_pcs_ptr->enc_dec_ptr->quantized_coeff[sb_addr];
     uint16_t tile_idx = context_ptr->tile_index;
     NeighborArrayUnit *ep_luma_recon_neighbor_array =
         is_16bit ? pcs_ptr->ep_luma_recon_neighbor_array16bit[tile_idx]
@@ -1343,8 +1348,7 @@ void perform_intra_coding_loop(PictureControlSet *pcs_ptr, SuperBlock *sb_ptr, u
                                 pcs_ptr->parent_pcs_ptr->reference_picture_wrapper_ptr->object_ptr)
                                ->reference_picture;
     else // non ref pictures
-        recon_buffer = is_16bit ? pcs_ptr->recon_picture16bit_ptr : pcs_ptr->recon_picture_ptr;
-
+        recon_buffer = is_16bit ? pcs_ptr->parent_pcs_ptr->enc_dec_ptr->recon_picture16bit_ptr : pcs_ptr->parent_pcs_ptr->enc_dec_ptr->recon_picture_ptr;
     uint32_t tot_tu = context_ptr->blk_geom->txb_count[blk_ptr->tx_depth];
 
     // Luma path
@@ -1394,10 +1398,9 @@ void perform_intra_coding_loop(PictureControlSet *pcs_ptr, SuperBlock *sb_ptr, u
 
             svt_av1_predict_intra_block_16bit(
                 bit_depth,
-                &sb_ptr->tile_info,
                 ED_STAGE,
                 context_ptr->blk_geom,
-                pcs_ptr->parent_pcs_ptr->av1_cm,
+                context_ptr->blk_ptr->av1xd,
                 context_ptr->blk_geom->bwidth,
                 context_ptr->blk_geom->bheight,
                 tx_size,
@@ -1423,7 +1426,6 @@ void perform_intra_coding_loop(PictureControlSet *pcs_ptr, SuperBlock *sb_ptr, u
                 context_ptr->blk_origin_y,
                 0,
                 0,
-                pcs_ptr->mi_grid_base,
                 &((SequenceControlSet *)pcs_ptr->scs_wrapper_ptr->object_ptr)->seq_header);
         } else {
             uint8_t        top_neigh_array[64 * 2 + 1];
@@ -1454,10 +1456,9 @@ void perform_intra_coding_loop(PictureControlSet *pcs_ptr, SuperBlock *sb_ptr, u
             // Hsan: if CHROMA_MODE_2, then CFL will be evaluated @ EP as no CHROMA @ MD
             // If that's the case then you should ensure than the 1st chroma prediction uses UV_DC_PRED (that's the default configuration for CHROMA_MODE_2 if CFL applicable (set @ fast loop candidates injection) then MD assumes chroma mode always UV_DC_PRED)
             svt_av1_predict_intra_block(
-                &sb_ptr->tile_info,
                 ED_STAGE,
                 context_ptr->blk_geom,
-                pcs_ptr->parent_pcs_ptr->av1_cm,
+                blk_ptr->av1xd,
                 context_ptr->blk_geom->bwidth,
                 context_ptr->blk_geom->bheight,
                 tx_size,
@@ -1483,7 +1484,6 @@ void perform_intra_coding_loop(PictureControlSet *pcs_ptr, SuperBlock *sb_ptr, u
                 context_ptr->blk_origin_y,
                 0,
                 0,
-                pcs_ptr->mi_grid_base,
                 &((SequenceControlSet *)pcs_ptr->scs_wrapper_ptr->object_ptr)->seq_header );
         }
         // Encode Transform Unit -INTRA-
@@ -1571,8 +1571,7 @@ void perform_intra_coding_loop(PictureControlSet *pcs_ptr, SuperBlock *sb_ptr, u
 
         // Update the luma Dc Sign Level Coeff Neighbor Array
         {
-            uint8_t dc_sign_level_coeff = (uint8_t)blk_ptr->quantized_dc[0][context_ptr->txb_itr];
-
+            uint8_t dc_sign_level_coeff = (uint8_t)context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[0][context_ptr->txb_itr];
             neighbor_array_unit_mode_write(
                 pcs_ptr->ep_luma_dc_sign_level_coeff_neighbor_array[tile_idx],
                 (uint8_t *)&dc_sign_level_coeff,
@@ -1671,10 +1670,9 @@ void perform_intra_coding_loop(PictureControlSet *pcs_ptr, SuperBlock *sb_ptr, u
 
                 svt_av1_predict_intra_block_16bit(
                     bit_depth,
-                    &sb_ptr->tile_info,
                     ED_STAGE,
                     context_ptr->blk_geom,
-                    pcs_ptr->parent_pcs_ptr->av1_cm,
+                    context_ptr->blk_ptr->av1xd,
                     plane ? context_ptr->blk_geom->bwidth_uv : context_ptr->blk_geom->bwidth,
                     plane ? context_ptr->blk_geom->bheight_uv : context_ptr->blk_geom->bheight,
                     tx_size,
@@ -1704,7 +1702,6 @@ void perform_intra_coding_loop(PictureControlSet *pcs_ptr, SuperBlock *sb_ptr, u
                     context_ptr->blk_origin_y,
                     0,
                     0,
-                    pcs_ptr->mi_grid_base,
                     &((SequenceControlSet *)pcs_ptr->scs_wrapper_ptr->object_ptr)->seq_header);
             }
         } else {
@@ -1762,10 +1759,9 @@ void perform_intra_coding_loop(PictureControlSet *pcs_ptr, SuperBlock *sb_ptr, u
                 // Hsan: if CHROMA_MODE_2, then CFL will be evaluated @ EP as no CHROMA @ MD
                 // If that's the case then you should ensure than the 1st chroma prediction uses UV_DC_PRED (that's the default configuration for CHROMA_MODE_2 if CFL applicable (set @ fast loop candidates injection) then MD assumes chroma mode always UV_DC_PRED)
                 svt_av1_predict_intra_block(
-                    &sb_ptr->tile_info,
                     ED_STAGE,
                     context_ptr->blk_geom,
-                    pcs_ptr->parent_pcs_ptr->av1_cm,
+                    blk_ptr->av1xd,
                     plane ? context_ptr->blk_geom->bwidth_uv : context_ptr->blk_geom->bwidth,
                     plane ? context_ptr->blk_geom->bheight_uv : context_ptr->blk_geom->bheight,
                     tx_size,
@@ -1795,7 +1791,6 @@ void perform_intra_coding_loop(PictureControlSet *pcs_ptr, SuperBlock *sb_ptr, u
                     context_ptr->blk_origin_y,
                     0,
                     0,
-                    pcs_ptr->mi_grid_base,
                     &((SequenceControlSet *)pcs_ptr->scs_wrapper_ptr->object_ptr)->seq_header);
             }
         }
@@ -1886,7 +1881,7 @@ void perform_intra_coding_loop(PictureControlSet *pcs_ptr, SuperBlock *sb_ptr, u
 
         // Update the cb Dc Sign Level Coeff Neighbor Array
         {
-            uint8_t dc_sign_level_coeff = (uint8_t)blk_ptr->quantized_dc[1][context_ptr->txb_itr];
+            uint8_t dc_sign_level_coeff = (uint8_t)context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[1][context_ptr->txb_itr];
             neighbor_array_unit_mode_write(
                 pcs_ptr->ep_cb_dc_sign_level_coeff_neighbor_array[tile_idx],
                 (uint8_t *)&dc_sign_level_coeff,
@@ -1899,7 +1894,7 @@ void perform_intra_coding_loop(PictureControlSet *pcs_ptr, SuperBlock *sb_ptr, u
 
         // Update the cr DC Sign Level Coeff Neighbor Array
         {
-            uint8_t dc_sign_level_coeff = (uint8_t)blk_ptr->quantized_dc[2][context_ptr->txb_itr];
+            uint8_t dc_sign_level_coeff = (uint8_t)context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[2][context_ptr->txb_itr];
             neighbor_array_unit_mode_write(
                 pcs_ptr->ep_cr_dc_sign_level_coeff_neighbor_array[tile_idx],
                 (uint8_t *)&dc_sign_level_coeff,
@@ -1989,7 +1984,7 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                uint32_t sb_origin_y, EncDecContext *context_ptr) {
     EbBool               is_16bit = context_ptr->is_16bit;
     EbPictureBufferDesc *recon_buffer;
-    EbPictureBufferDesc *coeff_buffer_sb = sb_ptr->quantized_coeff;
+    EbPictureBufferDesc *coeff_buffer_sb = pcs_ptr->parent_pcs_ptr->enc_dec_ptr->quantized_coeff[sb_addr];
     EbPictureBufferDesc *input_picture;
     ModeDecisionContext *md_context_ptr;
     md_context_ptr = context_ptr->md_context;
@@ -2004,8 +1999,6 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
     uint32_t              y_has_coeff;
     uint32_t              u_has_coeff;
     uint32_t              v_has_coeff;
-    uint64_t              y_full_distortion[DIST_CALC_TOTAL];
-    EB_ALIGN(16) uint64_t y_tu_full_distortion[DIST_CALC_TOTAL];
     uint32_t              count_non_zero_coeffs[3];
     uint16_t              eobs[MAX_TXB_COUNT][3];
     uint64_t              y_txb_coeff_bits;
@@ -2048,8 +2041,7 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                 pcs_ptr->parent_pcs_ptr->reference_picture_wrapper_ptr->object_ptr)
                                ->reference_picture;
     else // non ref pictures
-        recon_buffer = is_16bit ? pcs_ptr->recon_picture16bit_ptr : pcs_ptr->recon_picture_ptr;
-
+        recon_buffer = is_16bit ? pcs_ptr->parent_pcs_ptr->enc_dec_ptr->recon_picture16bit_ptr : pcs_ptr->parent_pcs_ptr->enc_dec_ptr->recon_picture_ptr;
     if (is_16bit && scs_ptr->static_config.encoder_bit_depth > EB_8BIT) {
         //SB128_TODO change 10bit SB creation
 
@@ -2233,7 +2225,6 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
             sb_width >> 1,
             sb_height >> 1);
     }
-    context_ptr->intra_coded_area_sb[sb_addr] = 0;
     context_ptr->coded_area_sb                = 0;
     context_ptr->coded_area_sb_uv             = 0;
 
@@ -2242,7 +2233,6 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
             svt_av1_loop_filter_init(pcs_ptr);
 
             svt_av1_pick_filter_level(
-                0,
                 (EbPictureBufferDesc *)pcs_ptr->parent_pcs_ptr->enhanced_picture_ptr,
                 pcs_ptr,
                 LPF_PICK_FROM_Q);
@@ -2303,12 +2293,15 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
 
                 context_ptr->blk_origin_x = (uint16_t)(sb_origin_x + blk_geom->origin_x);
                 context_ptr->blk_origin_y = (uint16_t)(sb_origin_y + blk_geom->origin_y);
-                context_ptr->md_skip_blk =
+                if (context_ptr->md_context->ep_use_md_skip_decision)
+                    context_ptr->md_skip_blk = !blk_ptr->block_has_coeff;
+                else
+                    context_ptr->md_skip_blk =
                     context_ptr->md_context->blk_skip_decision
-                        ? ((blk_ptr->prediction_mode_flag == INTRA_MODE || blk_ptr->block_has_coeff)
-                               ? 0
-                               : 1)
-                        : 0;
+                    ? ((blk_ptr->prediction_mode_flag == INTRA_MODE || blk_ptr->block_has_coeff)
+                        ? 0
+                        : 1)
+                    : 0;
                 blk_ptr->block_has_coeff = 0;
 
                 // if(pcs_ptr->picture_number==4 && context_ptr->blk_origin_x==0 && context_ptr->blk_origin_y==0)
@@ -2322,15 +2315,11 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                 } else {
                     blk_ptr->qindex = sb_ptr->qindex;
                 }
-
+                svt_block_on_mutex(pcs_ptr->parent_pcs_ptr->pcs_total_rate_mutex);
                 pcs_ptr->parent_pcs_ptr->pcs_total_rate += blk_ptr->total_rate;
+                svt_release_mutex(pcs_ptr->parent_pcs_ptr->pcs_total_rate_mutex);
                 if (blk_ptr->prediction_mode_flag == INTRA_MODE) {
                     context_ptr->is_inter = blk_ptr->use_intrabc;
-                    context_ptr->tot_intra_coded_area += blk_geom->bwidth * blk_geom->bheight;
-                    if (pcs_ptr->slice_type != I_SLICE)
-                        context_ptr->intra_coded_area_sb[sb_addr] +=
-                            blk_geom->bwidth * blk_geom->bheight;
-
                     if (scs_ptr->static_config.encoder_bit_depth > EB_8BIT &&
                         pcs_ptr->hbd_mode_decision == 0 &&
                         blk_ptr->palette_info.pmi.palette_size[0] > 0) {
@@ -2373,45 +2362,6 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                         pu_ptr = blk_ptr->prediction_unit_array;
 
                             {
-                                MvReferenceFrame ref_frame = INTRA_FRAME;
-                                generate_av1_mvp_table(&sb_ptr->tile_info,
-                                                       context_ptr->md_context,
-                                                       blk_ptr,
-                                                       context_ptr->blk_geom,
-                                                       context_ptr->blk_origin_x,
-                                                       context_ptr->blk_origin_y,
-                                                       &ref_frame,
-                                                       1,
-                                                       pcs_ptr);
-
-                                IntMv nearestmv, nearmv;
-                                svt_av1_find_best_ref_mvs_from_stack(
-                                    0,
-                                    context_ptr->md_context->md_local_blk_unit[blk_geom->blkidx_mds]
-                                        .ed_ref_mv_stack,
-                                    blk_ptr->av1xd,
-                                    ref_frame,
-                                    &nearestmv,
-                                    &nearmv,
-                                    0);
-
-                                if (nearestmv.as_int == INVALID_MV) nearestmv.as_int = 0;
-                                if (nearmv.as_int == INVALID_MV) nearmv.as_int = 0;
-                                IntMv dv_ref = nearestmv.as_int == 0 ? nearmv : nearestmv;
-                                if (dv_ref.as_int == 0)
-                                    av1_find_ref_dv(&dv_ref,
-                                                    &blk_ptr->av1xd->tile,
-                                                    scs_ptr->seq_header.sb_mi_size,
-                                                    context_ptr->blk_origin_y >> MI_SIZE_LOG2,
-                                                    context_ptr->blk_origin_x >> MI_SIZE_LOG2);
-                                // Ref DV should not have sub-pel.
-                                assert((dv_ref.as_mv.col & 7) == 0);
-                                assert((dv_ref.as_mv.row & 7) == 0);
-                                context_ptr->md_context->md_local_blk_unit[blk_geom->blkidx_mds]
-                                    .ed_ref_mv_stack[INTRA_FRAME][0]
-                                    .this_mv       = dv_ref;
-                                blk_ptr->predmv[0] = dv_ref;
-
                                 //keep final usefull mvp for entropy
                                 svt_memcpy(blk_ptr->av1xd->final_ref_mv_stack,
                                        context_ptr->md_context
@@ -2477,7 +2427,6 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                         0,
                                         1,
                                         &blk_ptr->interinter_comp,
-                                        &sb_ptr->tile_info,
                                         ep_luma_recon_neighbor_array,
                                         ep_cb_recon_neighbor_array,
                                         ep_cr_recon_neighbor_array,
@@ -2498,6 +2447,7 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                         (uint8_t)scs_ptr->static_config.encoder_bit_depth);
                                 } else {
                                     av1_inter_prediction(
+                                        scs_ptr,
                                         pcs_ptr,
                                         blk_ptr->interp_filters,
                                         blk_ptr,
@@ -2509,7 +2459,6 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                         0,
                                         1,
                                         &blk_ptr->interinter_comp,
-                                        &sb_ptr->tile_info,
                                         ep_luma_recon_neighbor_array,
                                         ep_cb_recon_neighbor_array,
                                         ep_cr_recon_neighbor_array,
@@ -2679,8 +2628,8 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
 
                             // Update the luma Dc Sign Level Coeff Neighbor Array
                             {
-                                uint8_t dcSignLevelCoeff = (uint8_t)blk_ptr->quantized_dc[0][context_ptr->txb_itr];
-
+                                    uint8_t dcSignLevelCoeff =
+                                        (uint8_t)context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[0][context_ptr->txb_itr];
                                 neighbor_array_unit_mode_write(
                                     pcs_ptr->ep_luma_dc_sign_level_coeff_neighbor_array[tile_idx],
                                     (uint8_t*)&dcSignLevelCoeff,
@@ -2694,7 +2643,8 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                             if (context_ptr->blk_geom->has_uv && uv_pass)
                             {
                                 // Update the cb Dc Sign Level Coeff Neighbor Array
-                                uint8_t dcSignLevelCoeff = (uint8_t)blk_ptr->quantized_dc[1][context_ptr->txb_itr];
+                                uint8_t dcSignLevelCoeff =
+                                    (uint8_t)context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[1][context_ptr->txb_itr];
                                 neighbor_array_unit_mode_write(
                                     pcs_ptr->ep_cb_dc_sign_level_coeff_neighbor_array[tile_idx],
                                     (uint8_t*)&dcSignLevelCoeff,
@@ -2705,7 +2655,8 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                     NEIGHBOR_ARRAY_UNIT_TOP_AND_LEFT_ONLY_MASK);
 
                                 // Update the cr DC Sign Level Coeff Neighbor Array
-                                dcSignLevelCoeff = (uint8_t)blk_ptr->quantized_dc[2][context_ptr->txb_itr];
+                                 dcSignLevelCoeff =
+                                    (uint8_t)context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[2][context_ptr->txb_itr];
                                 neighbor_array_unit_mode_write(
                                     pcs_ptr->ep_cr_dc_sign_level_coeff_neighbor_array[tile_idx],
                                     (uint8_t*)&dcSignLevelCoeff,
@@ -2759,12 +2710,10 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                 // Inter
                 else if (blk_ptr->prediction_mode_flag == INTER_MODE) {
                     uint8_t is_inter = context_ptr->is_inter = 1;
-                    int8_t ref_idx_l0 =
-                        context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].ref_frame_index_l0;
-                    int8_t ref_idx_l1 =
-                        context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].ref_frame_index_l1;
                     MvReferenceFrame rf[2];
                     av1_set_ref_frame(rf, (&blk_ptr->prediction_unit_array[0])->ref_frame_type);
+                    int8_t ref_idx_l0 = get_ref_frame_idx(rf[0]);
+                    int8_t ref_idx_l1 = rf[1] == NONE_FRAME ? get_ref_frame_idx(rf[0]) : get_ref_frame_idx(rf[1]);
                     uint8_t list_idx0, list_idx1;
                     list_idx0 = get_list_idx(rf[0]);
                     if (rf[1] == NONE_FRAME)
@@ -2789,29 +2738,13 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                     //        INTER
                     //********************************
                     // Perform Merge/Skip Decision if the mode coming from MD is merge. for the First CU in Row merge will remain as is.
-                    if (context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].merge_flag == EB_TRUE) {
+                    if (context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].skip_mode_allowed == EB_TRUE) {
                         is_blk_skip =
                             md_context_ptr->md_ep_pipe_sb[blk_ptr->mds_idx].skip_cost <=
                                     md_context_ptr->md_ep_pipe_sb[blk_ptr->mds_idx].merge_cost
                                 ? 1
                                 : 0;
                     }
-
-                    //IntMv  predmv[2];
-                    enc_pass_av1_mv_pred(&sb_ptr->tile_info,
-                                         context_ptr->md_context,
-                                         blk_ptr,
-                                         blk_geom,
-                                         context_ptr->blk_origin_x,
-                                         context_ptr->blk_origin_y,
-                                         pcs_ptr,
-                                         blk_ptr->prediction_unit_array[0].ref_frame_type,
-                                         blk_ptr->prediction_unit_array[0].is_compound,
-                                         blk_ptr->pred_mode,
-                                         blk_ptr->predmv);
-                    //out1:  predmv
-                    //out2:   blk_ptr->inter_mode_ctx[ blk_ptr->prediction_unit_array[0].ref_frame_type ]
-
                     //keep final usefull mvp for entropy
                     svt_memcpy(blk_ptr->av1xd->final_ref_mv_stack,
                            context_ptr->md_context
@@ -2859,22 +2792,18 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                             EbPictureBufferDesc             *ref_pic_list0;
                             EbPictureBufferDesc             *ref_pic_list1;
                             if (!is_16bit) {
-                                ref_pic_list0 =
-                                    context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].ref_frame_index_l0 >= 0
+                                ref_pic_list0 = ref_idx_l0 >= 0
                                     ? ref_obj_0->reference_picture
                                     : (EbPictureBufferDesc *)NULL;
-                                ref_pic_list1 =
-                                    context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].ref_frame_index_l1 >= 0
+                                ref_pic_list1 = ref_idx_l1 >= 0
                                     ? ref_obj_1->reference_picture
                                     : (EbPictureBufferDesc *)NULL;
                             }
                             else {
-                                ref_pic_list0 =
-                                    context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].ref_frame_index_l0 >= 0
+                                ref_pic_list0 = ref_idx_l0 >= 0
                                     ? ref_obj_0->reference_picture16bit
                                     : (EbPictureBufferDesc *)NULL;
-                                ref_pic_list1 =
-                                    context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].ref_frame_index_l1 >= 0
+                                ref_pic_list1 = ref_idx_l1 >= 0
                                     ? ref_obj_1->reference_picture16bit
                                     : (EbPictureBufferDesc *)NULL;
                             }
@@ -2893,6 +2822,11 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                     recon_buffer,
                                     context_ptr->blk_origin_x,
                                     context_ptr->blk_origin_y,
+                                    ep_luma_recon_neighbor_array,
+                                    ep_cb_recon_neighbor_array,
+                                    ep_cr_recon_neighbor_array,
+                                    NULL,
+
                                     &context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].wm_params_l0,
                                     &context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].wm_params_l1,
                                     (uint8_t)scs_ptr->static_config.encoder_bit_depth,
@@ -2905,21 +2839,17 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                             EbPictureBufferDesc *ref_pic_list1;
 
                             if (!is_16bit) {
-                                ref_pic_list0 =
-                                    context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].ref_frame_index_l0 >= 0
+                                ref_pic_list0 = ref_idx_l0 >= 0
                                     ? ref_obj_0->reference_picture
                                     : (EbPictureBufferDesc *)NULL;
-                                ref_pic_list1 =
-                                    context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].ref_frame_index_l1 >= 0
+                                ref_pic_list1 = ref_idx_l1 >= 0
                                     ? ref_obj_1->reference_picture
                                     : (EbPictureBufferDesc *)NULL;
                             } else {
-                                ref_pic_list0 =
-                                    context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].ref_frame_index_l0 >= 0
+                                ref_pic_list0 = ref_idx_l0 >= 0
                                     ? ref_obj_0->reference_picture16bit
                                     : (EbPictureBufferDesc *)NULL;
-                                ref_pic_list1 =
-                                    context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].ref_frame_index_l1 >= 0
+                                ref_pic_list1 = ref_idx_l1 >= 0
                                     ? ref_obj_1->reference_picture16bit
                                     : (EbPictureBufferDesc *)NULL;
                             }
@@ -2938,7 +2868,6 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                     0,
                                     blk_ptr->compound_idx,
                                     &blk_ptr->interinter_comp,
-                                    &sb_ptr->tile_info,
                                     ep_luma_recon_neighbor_array,
                                     ep_cb_recon_neighbor_array,
                                     ep_cr_recon_neighbor_array,
@@ -2959,6 +2888,7 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                     (uint8_t)scs_ptr->static_config.encoder_bit_depth);
                             } else {
                                 av1_inter_prediction(
+                                    scs_ptr,
                                     pcs_ptr,
                                     blk_ptr->interp_filters,
                                     blk_ptr,
@@ -2970,7 +2900,6 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                     0,
                                     blk_ptr->compound_idx,
                                     &blk_ptr->interinter_comp,
-                                    &sb_ptr->tile_info,
                                     ep_luma_recon_neighbor_array,
                                     ep_cb_recon_neighbor_array,
                                     ep_cr_recon_neighbor_array,
@@ -2999,17 +2928,8 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                     context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].u_has_coeff[0] = EB_FALSE;
                     context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].v_has_coeff[0] = EB_FALSE;
 
-                    // initialize TU Split
-                    y_full_distortion[DIST_CALC_RESIDUAL]   = 0;
-                    y_full_distortion[DIST_CALC_PREDICTION] = 0;
-
-
                     uint16_t tot_tu         = context_ptr->blk_geom->txb_count[blk_ptr->tx_depth];
-                    uint32_t component_mask = context_ptr->blk_geom->has_uv
-                                                  ? PICTURE_BUFFER_DESC_FULL_MASK
-                                                  : PICTURE_BUFFER_DESC_LUMA_MASK;
-
-                    if (context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].merge_flag == EB_FALSE) {
+                    if (context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].skip_mode_allowed == EB_FALSE) {
                         for (uint16_t tu_it = 0; tu_it < tot_tu; tu_it++) {
                             context_ptr->txb_itr = (uint8_t)tu_it;
                             uint8_t uv_pass =
@@ -3082,88 +3002,18 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                     ? PICTURE_BUFFER_DESC_FULL_MASK
                                     : PICTURE_BUFFER_DESC_LUMA_MASK,
                                 eobs[context_ptr->txb_itr]);
-
-                            // SKIP the CBF zero mode for DC path. There are problems with cost calculations
-                            {
-                                // Compute Tu distortion
-                                // LUMA DISTORTION
-                                picture_full_distortion32_bits(
-                                    transform_buffer,
-                                    context_ptr->coded_area_sb,
-                                    0,
-                                    inverse_quant_buffer,
-                                    context_ptr->coded_area_sb,
-                                    0,
-                                    blk_geom->tx_width[blk_ptr->tx_depth][tu_it],
-                                    blk_geom->tx_height[blk_ptr->tx_depth][tu_it],
-                                    context_ptr->blk_geom->bwidth_uv,
-                                    context_ptr->blk_geom->bheight_uv,
-                                    y_tu_full_distortion,
-                                    y_tu_full_distortion,
-                                    y_tu_full_distortion,
-                                    eobs[context_ptr->txb_itr][0],
-                                    0,
-                                    0,
-                                    COMPONENT_LUMA);
-                                TxSize tx_size =
-                                    blk_geom->txsize[blk_ptr->tx_depth][context_ptr->txb_itr];
-                                int32_t shift = (MAX_TX_SCALE - av1_get_tx_scale_tab[tx_size]) * 2;
-                                y_tu_full_distortion[DIST_CALC_RESIDUAL] = RIGHT_SIGNED_SHIFT(
-                                    y_tu_full_distortion[DIST_CALC_RESIDUAL], shift);
-                                y_tu_full_distortion[DIST_CALC_PREDICTION] = RIGHT_SIGNED_SHIFT(
-                                    y_tu_full_distortion[DIST_CALC_PREDICTION], shift);
-
-                                y_txb_coeff_bits  = 0;
-                                cb_txb_coeff_bits = 0;
-                                cr_txb_coeff_bits = 0;
-
-                                {
-                                    ModeDecisionCandidateBuffer **candidate_buffer_ptr_array_base =
-                                        context_ptr->md_context->candidate_buffer_ptr_array;
-                                    ModeDecisionCandidateBuffer **candidate_buffer_ptr_array =
-                                        &(candidate_buffer_ptr_array_base[0]);
-                                    ModeDecisionCandidateBuffer *candidate_buffer;
-
-                                    // Set the Candidate Buffer
-                                    candidate_buffer = candidate_buffer_ptr_array[0];
-                                    // Rate estimation function uses the values from CandidatePtr. The right values are copied from blk_ptr to CandidatePtr
-                                    candidate_buffer->candidate_ptr->type =
-                                        blk_ptr->prediction_mode_flag;
-
-                                    const uint32_t coeff1d_offset = context_ptr->coded_area_sb;
-
-                                    av1_txb_estimate_coeff_bits(
-                                        context_ptr->md_context,
-                                        0, //allow_update_cdf,
-                                        NULL,
-                                        pcs_ptr,
-                                        candidate_buffer,
-                                        coeff1d_offset,
-                                        context_ptr->coded_area_sb_uv,
-                                        coeff_buffer_sb,
-                                        eobs[context_ptr->txb_itr][0],
-                                        eobs[context_ptr->txb_itr][1],
-                                        eobs[context_ptr->txb_itr][2],
-                                        &y_txb_coeff_bits,
-                                        &cb_txb_coeff_bits,
-                                        &cr_txb_coeff_bits,
-                                        context_ptr->blk_geom
-                                            ->txsize[blk_ptr->tx_depth][context_ptr->txb_itr],
-                                        context_ptr->blk_geom
-                                            ->txsize_uv[blk_ptr->tx_depth][context_ptr->txb_itr],
-                                        blk_ptr->txb_array[context_ptr->txb_itr]
-                                            .transform_type[PLANE_TYPE_Y],
-                                        blk_ptr->txb_array[context_ptr->txb_itr]
-                                            .transform_type[PLANE_TYPE_UV],
-                                        context_ptr->blk_geom->has_uv && uv_pass ? COMPONENT_ALL
-                                                                                 : COMPONENT_LUMA);
-                                }
-                                av1_encode_txb_calc_cost(context_ptr,
-                                                         count_non_zero_coeffs,
-                                                         y_tu_full_distortion,
-                                                         &y_txb_coeff_bits,
-                                                         component_mask);
-
+                                context_ptr->md_context
+                                    ->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds]
+                                    .y_has_coeff[context_ptr->txb_itr] =
+                                    count_non_zero_coeffs[0] != 0 ? EB_TRUE : EB_FALSE;
+                                context_ptr->md_context
+                                    ->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds]
+                                    .u_has_coeff[context_ptr->txb_itr] =
+                                    count_non_zero_coeffs[1] != 0 ? EB_TRUE : EB_FALSE;
+                                context_ptr->md_context
+                                    ->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds]
+                                    .v_has_coeff[context_ptr->txb_itr] =
+                                    count_non_zero_coeffs[2] != 0 ? EB_TRUE : EB_FALSE;
                                 // Update count_non_zero_coeffs after CBF decision
                                 if (context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].y_has_coeff[context_ptr->txb_itr] ==
                                     EB_FALSE)
@@ -3182,12 +3032,6 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                     (uint16_t)count_non_zero_coeffs[1];
                                 blk_ptr->txb_array[context_ptr->txb_itr].nz_coef_count[2] =
                                     (uint16_t)count_non_zero_coeffs[2];
-
-                                y_full_distortion[DIST_CALC_RESIDUAL] +=
-                                    y_tu_full_distortion[DIST_CALC_RESIDUAL];
-                                y_full_distortion[DIST_CALC_PREDICTION] +=
-                                    y_tu_full_distortion[DIST_CALC_PREDICTION];
-
                                 if (pcs_ptr->cdf_ctrl.update_coef) {
                                     ModeDecisionCandidateBuffer **candidate_buffer_ptr_array_base =
                                         context_ptr->md_context->candidate_buffer_ptr_array;
@@ -3249,7 +3093,6 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                         context_ptr->blk_geom->has_uv && uv_pass ? COMPONENT_ALL
                                                                                  : COMPONENT_LUMA);
                                 }
-                            }
                             context_ptr->coded_area_sb +=
                                 blk_geom->tx_width[blk_ptr->tx_depth][tu_it] *
                                 blk_geom->tx_height[blk_ptr->tx_depth][tu_it];
@@ -3261,8 +3104,7 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                             // Update the luma Dc Sign Level Coeff Neighbor Array
                             {
                                 uint8_t dc_sign_level_coeff =
-                                    (uint8_t)blk_ptr->quantized_dc[0][context_ptr->txb_itr];
-
+                                    (uint8_t)context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[0][context_ptr->txb_itr];
                                 neighbor_array_unit_mode_write(
                                     pcs_ptr->ep_luma_dc_sign_level_coeff_neighbor_array[tile_idx],
                                     (uint8_t *)&dc_sign_level_coeff,
@@ -3278,7 +3120,7 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                             if (context_ptr->blk_geom->has_uv && uv_pass) {
                                 // Update the cb Dc Sign Level Coeff Neighbor Array
                                 uint8_t dc_sign_level_coeff =
-                                    (uint8_t)blk_ptr->quantized_dc[1][context_ptr->txb_itr];
+                                    (uint8_t)context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[1][context_ptr->txb_itr];
                                 neighbor_array_unit_mode_write(
                                     pcs_ptr->ep_cb_dc_sign_level_coeff_neighbor_array[tile_idx],
                                     (uint8_t *)&dc_sign_level_coeff,
@@ -3291,8 +3133,8 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                     NEIGHBOR_ARRAY_UNIT_TOP_AND_LEFT_ONLY_MASK);
 
                                 // Update the cr DC Sign Level Coeff Neighbor Array
-                                dc_sign_level_coeff =
-                                    (uint8_t)blk_ptr->quantized_dc[2][context_ptr->txb_itr];
+                                 dc_sign_level_coeff =
+                                    (uint8_t)context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[2][context_ptr->txb_itr];
                                 neighbor_array_unit_mode_write(
                                     pcs_ptr->ep_cr_dc_sign_level_coeff_neighbor_array[tile_idx],
                                     (uint8_t *)&dc_sign_level_coeff,
@@ -3309,9 +3151,9 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                     }
 
                     //Set Final CU data flags after skip/Merge decision.
-                    if (context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].merge_flag == EB_TRUE) {
+                    if (context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].skip_mode_allowed == EB_TRUE) {
                         blk_ptr->skip_flag = (is_blk_skip) ? EB_TRUE : EB_FALSE;
-                        context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].merge_flag =
+                        context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].skip_mode_allowed =
                             (is_blk_skip) ? EB_FALSE : EB_TRUE;
                     }
 
@@ -3383,10 +3225,10 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                             context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].u_has_coeff[context_ptr->txb_itr] = EB_FALSE;
                             context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].v_has_coeff[context_ptr->txb_itr] = EB_FALSE;
 
-                            context_ptr->blk_ptr->quantized_dc[0][context_ptr->txb_itr] = 0;
-                            context_ptr->blk_ptr->quantized_dc[1][context_ptr->txb_itr] = 0;
-                            context_ptr->blk_ptr->quantized_dc[2][context_ptr->txb_itr] = 0;
-                        } else if (context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].merge_flag == EB_TRUE) {
+                            context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[0][context_ptr->txb_itr] = 0;
+                            context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[1][context_ptr->txb_itr] = 0;
+                            context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[2][context_ptr->txb_itr] = 0;
+                        } else if (context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].skip_mode_allowed == EB_TRUE) {
 
                             //inter mode  2
 
@@ -3514,8 +3356,7 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                         // Update the luma Dc Sign Level Coeff Neighbor Array
                         {
                             uint8_t dc_sign_level_coeff =
-                                (uint8_t)blk_ptr->quantized_dc[0][context_ptr->txb_itr];
-
+                                (uint8_t)context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[0][context_ptr->txb_itr];
                             neighbor_array_unit_mode_write(
                                 pcs_ptr->ep_luma_dc_sign_level_coeff_neighbor_array[tile_idx],
                                 (uint8_t *)&dc_sign_level_coeff,
@@ -3531,7 +3372,7 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                         // Update the cb Dc Sign Level Coeff Neighbor Array
                         if (context_ptr->blk_geom->has_uv && uv_pass) {
                             uint8_t dc_sign_level_coeff =
-                                (uint8_t)blk_ptr->quantized_dc[1][context_ptr->txb_itr];
+                                (uint8_t)context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[1][context_ptr->txb_itr];
                             neighbor_array_unit_mode_write(
                                 pcs_ptr->ep_cb_dc_sign_level_coeff_neighbor_array[tile_idx],
                                 (uint8_t *)&dc_sign_level_coeff,
@@ -3544,7 +3385,7 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                                 NEIGHBOR_ARRAY_UNIT_TOP_AND_LEFT_ONLY_MASK);
                             // Update the cr DC Sign Level Coeff Neighbor Array
                             dc_sign_level_coeff =
-                                (uint8_t)blk_ptr->quantized_dc[2][context_ptr->txb_itr];
+                                (uint8_t)context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].quantized_dc[2][context_ptr->txb_itr];
                             neighbor_array_unit_mode_write(
                                 pcs_ptr->ep_cr_dc_sign_level_coeff_neighbor_array[tile_idx],
                                 (uint8_t *)&dc_sign_level_coeff,
@@ -3569,7 +3410,7 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                     // Force Skip if MergeFlag == TRUE && RootCbf == 0
 
                     if (blk_ptr->skip_flag == EB_FALSE &&
-                        context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].merge_flag == EB_TRUE &&
+                        context_ptr->md_context->md_local_blk_unit[context_ptr->blk_geom->blkidx_mds].skip_mode_allowed == EB_TRUE &&
                         blk_ptr->block_has_coeff == EB_FALSE) {
                         blk_ptr->skip_flag = EB_TRUE;
                     }
@@ -3630,7 +3471,7 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                             ->reference_picture_wrapper_ptr->object_ptr)
                         ->reference_picture16bit;
                     else // non ref pictures
-                        recon_buffer_16bit = pcs_ptr->recon_picture16bit_ptr;
+                        recon_buffer_16bit = pcs_ptr->parent_pcs_ptr->enc_dec_ptr->recon_picture16bit_ptr;
 
                     if (pcs_ptr->parent_pcs_ptr->is_used_as_reference_flag == EB_TRUE)
                         //get the 16bit form of the input SB
@@ -3638,7 +3479,7 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                             ->reference_picture_wrapper_ptr->object_ptr)
                         ->reference_picture;
                     else // non ref pictures
-                        recon_buffer_8bit = pcs_ptr->recon_picture_ptr;
+                        recon_buffer_8bit = pcs_ptr->parent_pcs_ptr->enc_dec_ptr->recon_picture_ptr;
 
                     uint32_t pred_buf_x_offest = context_ptr->blk_origin_x;
                     uint32_t pred_buf_y_offest = context_ptr->blk_origin_y;
@@ -3706,11 +3547,7 @@ EB_EXTERN void av1_encode_decode(SequenceControlSet *scs_ptr, PictureControlSet 
                         context_ptr->blk_geom->bwidth_uv,
                         context_ptr->blk_geom->bheight_uv);
                 }
-                update_av1_mi_map(blk_ptr,
-                                  context_ptr->blk_origin_x,
-                                  context_ptr->blk_origin_y,
-                                  blk_geom,
-                                  pcs_ptr);
+                update_mi_map_skip_settings(blk_ptr);
                 if (pcs_ptr->cdf_ctrl.update_se) {
                     // Update the partition Neighbor Array
                     PartitionContext partition;
@@ -3788,8 +3625,7 @@ else blk_it +=
         pcs_ptr->parent_pcs_ptr->frm_hdr.loop_filter_params.filter_level[1]) {
         uint8_t last_col =
             ((sb_origin_x) + sb_width == pcs_ptr->parent_pcs_ptr->aligned_width) ? 1 : 0;
-        loop_filter_sb(
-            recon_buffer, pcs_ptr, NULL, sb_origin_y >> 2, sb_origin_x >> 2, 0, 3, last_col);
+        loop_filter_sb(recon_buffer, pcs_ptr, sb_origin_y >> 2, sb_origin_x >> 2, 0, 3, last_col);
     }
 }
 

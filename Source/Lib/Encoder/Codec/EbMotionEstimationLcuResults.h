@@ -30,10 +30,12 @@ typedef struct MeCandidate {
     uint8_t ref0_list : 1;
     uint8_t ref1_list : 1;
 } MeCandidate;
+
 typedef struct MvCandidate {
     signed short x_mv;
     signed short y_mv;
 } MvCandidate;
+
 // move this to a new file with ctor & dtor
 typedef struct MeSbResults {
     EbDctor      dctor;
