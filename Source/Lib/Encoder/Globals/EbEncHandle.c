@@ -2559,10 +2559,12 @@ void set_param_based_on_input(SequenceControlSet *scs_ptr)
         scs_ptr->static_config.enable_tpl_la = 0;
         scs_ptr->static_config.rate_control_mode = 0;
         scs_ptr->static_config.intra_refresh_type = 2;
+        scs_ptr->intra_refresh_type = scs_ptr->static_config.intra_refresh_type;
     }
     else if (use_input_stat(scs_ptr) || scs_ptr->lap_enabled) {
         scs_ptr->static_config.enable_tpl_la = 1;
         scs_ptr->static_config.intra_refresh_type = 2;
+        scs_ptr->intra_refresh_type = scs_ptr->static_config.intra_refresh_type;
     }
 
     if (scs_ptr->static_config.recode_loop > 0 &&
