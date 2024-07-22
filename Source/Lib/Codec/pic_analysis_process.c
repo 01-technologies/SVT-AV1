@@ -2227,8 +2227,8 @@ void *svt_aom_picture_analysis_kernel(void *input_ptr) {
             // If running multi-threaded mode, perform SC detection in svt_aom_picture_analysis_kernel, else in svt_aom_picture_decision_kernel
             if (scs->static_config.logical_processors != 1) {
                 if (scs->static_config.screen_content_mode == 2) { // auto detect
-                    // SC Detection is OFF for 4K and higher
-                    if (scs->input_resolution <= INPUT_SIZE_1080p_RANGE)
+                    // SC Detection is OFF for 8K and higher
+                    if (scs->input_resolution <= INPUT_SIZE_4K_RANGE)
                         svt_aom_is_screen_content(pcs);
                     else
                         pcs->sc_class0 = pcs->sc_class1 = pcs->sc_class2 = pcs->sc_class3 = 0;
