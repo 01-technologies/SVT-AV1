@@ -980,6 +980,9 @@ static EbErrorType load_default_buffer_configuration_settings(
     else if (lp <= PARALLEL_LEVEL_5) {
         scs->picture_control_set_pool_init_count_child = scs->enc_dec_pool_init_count = clamp(16, min_child, max_child) + superres_count;
     }
+    else if (scs->static_config.rate_control_mode == SVT_AV1_RC_MODE_VBR && scs->static_config.pass == ENC_SECOND_PASS) {
+        scs->picture_control_set_pool_init_count_child = scs->enc_dec_pool_init_count = clamp(24, min_child, max_child) + superres_count;
+    }
     else {
         scs->picture_control_set_pool_init_count_child = scs->enc_dec_pool_init_count = clamp(18, min_child, max_child) + superres_count;
     }
