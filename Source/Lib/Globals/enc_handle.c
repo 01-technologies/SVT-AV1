@@ -4757,7 +4757,7 @@ static void copy_api_from_app(
         scs->static_config.hierarchical_levels = scs->static_config.pred_structure == SVT_AV1_PRED_LOW_DELAY_B ?
             2 :
             scs->static_config.fast_decode != 0 ||
-            scs->static_config.rate_control_mode == SVT_AV1_RC_MODE_VBR || scs->static_config.rate_control_mode == SVT_AV1_RC_MODE_CBR ||
+            scs->static_config.rate_control_mode == SVT_AV1_RC_MODE_CBR ||
             (input_resolution >= INPUT_SIZE_1080p_RANGE && scs->static_config.enc_mode >= ENC_M9) ||
             !(scs->static_config.enc_mode <= ENC_M9) || input_resolution >= INPUT_SIZE_8K_RANGE
                 ? 4
