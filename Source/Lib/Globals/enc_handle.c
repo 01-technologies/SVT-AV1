@@ -984,7 +984,7 @@ static EbErrorType load_default_buffer_configuration_settings(
         scs->picture_control_set_pool_init_count_child = scs->enc_dec_pool_init_count = clamp(24, min_child, max_child) + superres_count;
     }
     else {
-        scs->picture_control_set_pool_init_count_child = scs->enc_dec_pool_init_count = clamp(18, min_child, max_child) + superres_count;
+        scs->picture_control_set_pool_init_count_child = scs->enc_dec_pool_init_count = clamp(20, min_child, max_child) + superres_count;
     }
 #else
     if (core_count == SINGLE_CORE_COUNT || MIN_PIC_PARALLELIZATION) {
