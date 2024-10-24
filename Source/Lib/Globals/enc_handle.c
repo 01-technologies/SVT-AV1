@@ -1087,7 +1087,7 @@ static EbErrorType load_default_buffer_configuration_settings(
     else if (lp <= PARALLEL_LEVEL_5 || scs->input_resolution <= INPUT_SIZE_1080p_RANGE) {
         uint8_t pa_processes = 4;
         if (scs->static_config.pass == ENC_FIRST_PASS) {
-            pa_processes = lp <= PARALLEL_LEVEL_5 ? 12: 20;
+            pa_processes = lp <= PARALLEL_LEVEL_5 ? 12 : 20;
         }
         scs->total_process_init_count += (scs->source_based_operations_process_init_count = 1);
         scs->total_process_init_count += (scs->picture_analysis_process_init_count = clamp(pa_processes, 1, max_pa_proc));
