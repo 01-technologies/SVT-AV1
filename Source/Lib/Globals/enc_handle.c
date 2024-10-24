@@ -980,11 +980,9 @@ static EbErrorType load_default_buffer_configuration_settings(
     else if (lp <= PARALLEL_LEVEL_5) {
         scs->picture_control_set_pool_init_count_child = scs->enc_dec_pool_init_count = clamp(16, min_child, max_child) + superres_count;
     }
-    else if (scs->static_config.rate_control_mode == SVT_AV1_RC_MODE_VBR && scs->static_config.pass == ENC_SECOND_PASS) {
-        scs->picture_control_set_pool_init_count_child = scs->enc_dec_pool_init_count = clamp(24, min_child, max_child) + superres_count;
-    }
     else {
-        scs->picture_control_set_pool_init_count_child = scs->enc_dec_pool_init_count = clamp(20, min_child, max_child) + superres_count;
+        const uint8_t pcs_processes = scs->static_config.rate_control_mode == SVT_AV1_RC_MODE_VBR && scs->static_config.pass == ENC_SECOND_PASS ? 24 : 20;
+        scs->picture_control_set_pool_init_count_child = scs->enc_dec_pool_init_count = clamp(pcs_processes, min_child, max_child) + superres_count;
     }
 #else
     if (core_count == SINGLE_CORE_COUNT || MIN_PIC_PARALLELIZATION) {
@@ -1089,7 +1087,7 @@ static EbErrorType load_default_buffer_configuration_settings(
     else if (lp <= PARALLEL_LEVEL_5 || scs->input_resolution <= INPUT_SIZE_1080p_RANGE) {
         uint8_t pa_processes = 4;
         if (scs->static_config.pass == ENC_FIRST_PASS) {
-            pa_processes = lp > PARALLEL_LEVEL_5 ? 20 : 12;
+            pa_processes = lp <= PARALLEL_LEVEL_5 ? 12: 20;
         }
         scs->total_process_init_count += (scs->source_based_operations_process_init_count = 1);
         scs->total_process_init_count += (scs->picture_analysis_process_init_count = clamp(pa_processes, 1, max_pa_proc));
