@@ -23,7 +23,8 @@ target_sources(
   PUBLIC highbd_jnt_convolve_sve.c
   PUBLIC highbd_pickrst_sve.c
   PUBLIC highbd_variance_sve.c
-  PUBLIC pickrst_sve.c)
+  PUBLIC pickrst_sve.c
+  PUBLIC wedge_utils_sve.c)
 
 target_include_directories(
   ASM_SVE
